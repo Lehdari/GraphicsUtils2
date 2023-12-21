@@ -69,6 +69,7 @@ private:
 };
 
 
+// Predefined SDL objects
 using SDLWindow = SDLObject<SDL_Window, SDL_CreateWindow, SDL_DestroyWindow>;
 
 
