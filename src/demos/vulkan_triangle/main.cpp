@@ -13,7 +13,10 @@
 
 int main(void)
 {
-    gu2::Window window;
+    gu2::WindowSettings settings;
+    settings.w = 800;
+    settings.h = 600;
+    gu2::Window window(settings);
 
     bool keep_window_open = true;
     while(keep_window_open)

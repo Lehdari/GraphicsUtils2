@@ -11,12 +11,21 @@
 #include <Window.hpp>
 
 
-gu2::Window::Window() :
-    _window ("window", 0, 0, 1280, 720, 0)
+using namespace gu2;
+
+
+Window::Window(const WindowSettings& settings) :
+    _settings   (settings),
+    _window     ("window", _settings.x, _settings.y, _settings.w, _settings.h, SDL_WINDOW_VULKAN)
 {
 }
 
-void gu2::Window::update()
+void Window::update()
 {
-    // TODO
+
+}
+
+const WindowSettings& Window::getSettings() const
+{
+    return _settings;
 }

@@ -14,16 +14,31 @@
 
 #include "SDLObject.hpp"
 
+#include <string>
+
 
 namespace gu2 {
 
+struct WindowSettings {
+    std::string name    {"window"};
+    int         w       {1280};
+    int         h       {720};
+    int         x       {SDL_WINDOWPOS_CENTERED};
+    int         y       {SDL_WINDOWPOS_CENTERED};
+};
+
 class Window {
 public:
-    Window();
+    using Settings = WindowSettings;
+
+    Window(const Settings& settings = Settings());
 
     void update();
 
+    const Settings& getSettings() const;
+
 private:
+    Settings    _settings;
     SDLWindow   _window;
 };
 
