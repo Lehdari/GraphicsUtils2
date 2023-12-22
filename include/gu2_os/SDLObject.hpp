@@ -12,7 +12,7 @@
 #define GRAPHICSUTILS2_SDLOBJECT_HPP
 
 
-#include <SDL2/SDL.h>
+#include "SDLUtils.hpp"
 
 #include <utility>
 
@@ -27,6 +27,8 @@ public:
     SDLObject(T_Args&&... args) :
         _object (Creator(std::forward<T_Args>(args)...))
     {
+        if (_object == nullptr) // An error occurred during object construction
+            SDL_THROW_ERROR
     }
     ~SDLObject()
     {
