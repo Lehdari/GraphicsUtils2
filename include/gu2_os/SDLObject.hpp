@@ -8,8 +8,7 @@
 // with this source code package.
 //
 
-#ifndef GRAPHICSUTILS2_SDLOBJECT_HPP
-#define GRAPHICSUTILS2_SDLOBJECT_HPP
+#pragma once
 
 
 #include "SDLUtils.hpp"
@@ -76,6 +75,3 @@ using SDLWindow = SDLObject<SDL_Window, SDL_CreateWindow, SDL_DestroyWindow>;
 
 
 } // namespace gu2
-
-
-#endif //GRAPHICSUTILS2_SDLOBJECT_HPP

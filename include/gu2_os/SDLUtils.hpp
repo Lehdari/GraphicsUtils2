@@ -8,8 +8,7 @@
 // with this source code package.
 //
 
-#ifndef GRAPHICSUTILS2_SDLUTILS_HPP
-#define GRAPHICSUTILS2_SDLUTILS_HPP
+#pragma once
 
 
 #include <SDL2/SDL.h>
@@ -23,6 +22,3 @@
     SDL_ClearError();                           \
     throw error;                                \
 }
-
-
-#endif //GRAPHICSUTILS2_SDLUTILS_HPP

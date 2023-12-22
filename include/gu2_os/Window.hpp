@@ -8,8 +8,7 @@
 // with this source code package.
 //
 
-#ifndef GRAPHICSUTILS2_WINDOW_HPP
-#define GRAPHICSUTILS2_WINDOW_HPP
+#pragma once
 
 
 #include "SDLObject.hpp"
@@ -43,6 +42,3 @@ private:
 };
 
 } // namespace gu2
-
-
-#endif //GRAPHICSUTILS2_WINDOW_HPP
