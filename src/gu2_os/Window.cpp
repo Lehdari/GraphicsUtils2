@@ -20,11 +20,6 @@ Window::Window(const WindowSettings& settings) :
 {
 }
 
-void Window::update()
-{
-
-}
-
 const WindowSettings& Window::getSettings() const
 {
     return _settings;

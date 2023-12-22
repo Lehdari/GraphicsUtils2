@@ -32,13 +32,16 @@ public:
 
     Window(const Settings& settings = Settings());
 
-    void update();
-
     const Settings& getSettings() const;
+
+    template <typename T_Application>
+    void update(T_Application& application);
 
 private:
     Settings    _settings;
     SDLWindow   _window;
 };
+
+#include "Window.inl"
 
 } // namespace gu2

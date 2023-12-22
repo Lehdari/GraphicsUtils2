@@ -8,7 +8,45 @@
 // with this source code package.
 //
 
+#include <gu2_os/Application.hpp>
 #include <gu2_os/Window.hpp>
+
+
+class App : gu2::Application<App> {
+public:
+    App() :
+        _running    (true)
+    {}
+
+    void handleEvent(const SDL_Event& event, const gu2::Window& window)
+    {
+        switch(event.type) {
+            case SDL_QUIT:
+                _running = false;
+                break;
+            case SDL_KEYDOWN:
+                if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+                    _running = false;
+                break;
+        }
+    }
+
+    void render(const gu2::Window& window)
+    {
+        // TODO
+    }
+
+    void loop(gu2::Window& window)
+    {
+        while (_running) {
+            window.update(*this);
+            SDL_Delay(10);
+        }
+    }
+
+private:
+    bool    _running;
+};
 
 
 int main(void)
@@ -17,24 +55,8 @@ int main(void)
     settings.w = 800;
     settings.h = 600;
     gu2::Window window(settings);
-
-    bool keep_window_open = true;
-    while(keep_window_open)
-    {
-        SDL_Event e;
-        while(SDL_PollEvent(&e) > 0)
-        {
-            switch(e.type)
-            {
-                case SDL_QUIT:
-                    keep_window_open = false;
-                    break;
-            }
-        }
-
-        window.update();
-        SDL_Delay(10);
-    }
+    App app;
+    app.loop(window);
 
     return 0;
 }
