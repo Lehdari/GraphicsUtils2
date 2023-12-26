@@ -1,6 +1,7 @@
 # Library sources
 set(GU2_OS_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/gu2_os/Window.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/gu2_os/EventHandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/gu2_os/${GU2_BACKEND_SOURCE_FILE}
 )
 
 # Library targets
@@ -12,13 +13,17 @@ endif()
 
 # Library properties
 target_link_libraries(gu2_os
-    PUBLIC  SDL2::SDL2
+    PUBLIC  ${GU2_BACKEND_LIB}
 )
 target_include_directories(gu2_os
     PUBLIC  $<BUILD_INTERFACE:${GU2_INCLUDE_DIR}> $<INSTALL_INTERFACE:include>
     PRIVATE ${GU2_INCLUDE_DIR}/gu2_os
 )
-set_property(TARGET gu2_os PROPERTY CXX_STANDARD 17)
+target_compile_definitions(gu2_os
+    PUBLIC  -DGU2_BACKEND=${GU2_BACKEND_ENUM}
+    PUBLIC  -DGU2_BACKEND_NAME=\"${GU2_BACKEND}\"
+)
+set_property(TARGET gu2_os PROPERTY CXX_STANDARD 20)
 
 # Library aliases
 add_library(gu2::os ALIAS gu2_os)

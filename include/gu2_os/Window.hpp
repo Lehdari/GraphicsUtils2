@@ -11,35 +11,35 @@
 #pragma once
 
 
-#include "SDLObject.hpp"
+#include "backend.hpp"
+#include "CObjectWrapper.hpp"
 
 #include <string>
 
 
 namespace gu2 {
 
-struct WindowSettings {
-    std::string name    {"window"};
-    int         w       {1280};
-    int         h       {720};
-    int         x       {SDL_WINDOWPOS_CENTERED};
-    int         y       {SDL_WINDOWPOS_CENTERED};
-};
-
+template <typename T_Derived>
 class Window {
 public:
     using Settings = WindowSettings;
 
     Window(const Settings& settings = Settings());
 
-    const Settings& getSettings() const;
+    void close();
 
-    template <typename T_Application>
-    void update(T_Application& application);
+    const Settings& getSettings() const;
+    bool isOpen() const;
+
+    void handleEvent(const Event& event);
+    void render();
+
+    friend class EventHandler;
+protected:
+    Settings        _settings;
 
 private:
-    Settings    _settings;
-    SDLWindow   _window;
+    WindowObject    _window;
 };
 
 #include "Window.inl"

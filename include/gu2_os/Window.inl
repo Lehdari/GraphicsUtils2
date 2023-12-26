@@ -8,12 +8,39 @@
 // with this source code package.
 //
 
-template<typename T_Application>
-void Window::update(T_Application& application)
+template <typename T_Derived>
+Window<T_Derived>::Window(const WindowSettings& settings) :
+    _settings   (settings),
+    _window     (detail::createWindowObject(_settings))
 {
-    SDL_Event event;
-    while(SDL_PollEvent(&event) > 0) {
-        application.handleEvent(event, *this);
-    }
-    application.render(*this);
+}
+
+template<typename T_Derived>
+void Window<T_Derived>::close()
+{
+    _window.destroy();
+}
+
+template <typename T_Derived>
+const WindowSettings& Window<T_Derived>::getSettings() const
+{
+    return _settings;
+}
+
+template<typename T_Derived>
+bool Window<T_Derived>::isOpen() const
+{
+    return _window.get() != nullptr;
+}
+
+template <typename T_Derived>
+void Window<T_Derived>::handleEvent(const Event& event)
+{
+    static_cast<T_Derived*>(this)->handleEvent(event);
+}
+
+template <typename T_Derived>
+void Window<T_Derived>::render()
+{
+    static_cast<T_Derived*>(this)->render();
 }

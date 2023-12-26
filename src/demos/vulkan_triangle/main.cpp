@@ -8,40 +8,35 @@
 // with this source code package.
 //
 
-#include <gu2_os/Application.hpp>
+#include <gu2_os/EventHandler.hpp>
 #include <gu2_os/Window.hpp>
 
 
-class App : gu2::Application<App> {
+class MyWindow : public gu2::Window<MyWindow> {
 public:
-    App() :
-        _running    (true)
-    {}
-
-    void handleEvent(const SDL_Event& event, const gu2::Window& window)
+    MyWindow(const gu2::WindowSettings& settings) :
+        Window<MyWindow>    (settings),
+        _running            (true)
     {
-        switch(event.type) {
-            case SDL_QUIT:
-                _running = false;
+    }
+
+    ~MyWindow() {}
+
+    void handleEvent(const gu2::Event& event)
+    {
+        switch (event.type) {
+            case gu2::Event::WINDOW:
+                switch (event.window.event) {
+                    case gu2::WINDOWEVENT_CLOSE: close(); return;
+                }
                 break;
-            case SDL_KEYDOWN:
-                if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
-                    _running = false;
-                break;
+            default: break;
         }
     }
 
-    void render(const gu2::Window& window)
+    void render()
     {
         // TODO
-    }
-
-    void loop(gu2::Window& window)
-    {
-        while (_running) {
-            window.update(*this);
-            SDL_Delay(10);
-        }
     }
 
 private:
@@ -51,12 +46,24 @@ private:
 
 int main(void)
 {
-    gu2::WindowSettings settings;
-    settings.w = 800;
-    settings.h = 600;
-    gu2::Window window(settings);
-    App app;
-    app.loop(window);
+    gu2::WindowSettings settings1;
+    settings1.name = "Little Window";
+    settings1.w = 640;
+    settings1.h = 480;
+    MyWindow window1(settings1);
+
+    gu2::WindowSettings settings2;
+    settings2.name = "Big Window";
+    settings2.w = 800;
+    settings2.h = 600;
+    MyWindow window2(settings2);
+
+    gu2::EventHandler eventHandler;
+    eventHandler.addWindow(&window1);
+    eventHandler.addWindow(&window2);
+
+    // Main loop
+    while (eventHandler());
 
     return 0;
 }

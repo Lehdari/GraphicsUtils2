@@ -1,3 +1,6 @@
 [submodule "ext/SDL"]
 	path = ext/SDL
 	url = git@github.com:libsdl-org/SDL.git
+[submodule "ext/glfw"]
+	path = ext/glfw
+	url = git@github.com:glfw/glfw.git
