@@ -13,6 +13,10 @@ function(gu2_select_backend backend)
         return()
     endif()
 
-    message(STATUS "Selected GraphicsUtils2 OS interfacing backend: ${backend}")
+    set (extra_args ${ARGN}) # disable the print by passing an extra argument
+    list(LENGTH extra_args extra_count)
+    if (${extra_count} EQUAL 0)
+        message(STATUS "Selected GraphicsUtils2 OS interfacing backend: ${backend}")
+    endif ()
     set(GU2_BACKEND ${backend} PARENT_SCOPE)
 endfunction()
