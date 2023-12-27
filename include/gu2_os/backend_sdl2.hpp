@@ -42,14 +42,10 @@ struct WindowSettings {
     int         y       {Position::CENTERED};
 };
 
-namespace detail {
-
-using BackendWindow = SDL_Window;
-
-} // namespace detail
 
 // Predefined SDL objects
-using WindowObject = CObjectWrapper<detail::BackendWindow, SDL_CreateWindow, SDL_DestroyWindow>;
+using WindowObject = CObjectWrapper<SDL_Window, SDL_CreateWindow, SDL_DestroyWindow>;
+
 
 namespace detail {
 

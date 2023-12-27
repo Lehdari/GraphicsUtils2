@@ -21,11 +21,6 @@ EventHandler::WindowMap EventHandler::_windowMap;
 EventHandler::EventHandler(EventHandler::Callback callback) :
     _callback   (callback)
 {
-    #if GU2_BACKEND == GU2_BACKEND_SDL2
-
-    #elif GU2_BACKEND == GU2_BACKEND_GLFW
-    glfwInit();
-    #endif
 }
 
 bool EventHandler::operator()()
@@ -35,8 +30,8 @@ bool EventHandler::operator()()
     while (SDL_PollEvent(&sdlEvent)) {
         switch (sdlEvent.type) {
             case SDL_WINDOWEVENT: {
-                auto& window = _windows[_sdlWindowIdMap.at(sdlEvent.window.windowID)];
-                window.handleEvent(_windowMap.at(window.window), convertSDLEvent(sdlEvent));
+                auto& window = _windowMap.at(sdlEvent.window.windowID);
+                window.handleEvent(window.window, convertSDLEvent(sdlEvent));
             }   break;
         }
     }
@@ -44,10 +39,11 @@ bool EventHandler::operator()()
     glfwPollEvents();
     #endif
 
-    // TODO remove closed windows from _windows vector (and _sdlWindowIdMap)
+    // TODO remove closed windows from _windows vector (and _windowMap)
 
-    for (const auto& window : _windows) {
-        if (window.isOpen(_windowMap.at(window.window)))
+    for (const auto& windowId : _windows) {
+        const auto& window = _windowMap.at(windowId);
+        if (window.isOpen(window.window))
             return true;
     }
 

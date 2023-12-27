@@ -44,24 +44,25 @@ public:
 private:
     using WindowHandleEventFunction = void(*)(void*, const Event& event);
     using WindowIsOpenFunction = bool(*)(void*);
-    using WindowMap = std::unordered_map<detail::BackendWindow*, void*>;
 
     // Helper struct needed for type erasure
     struct WindowStorage {
-        detail::BackendWindow*      window;
+        void*                       window;
         WindowHandleEventFunction   handleEvent;
         WindowIsOpenFunction        isOpen;
     };
 
-    Callback                    _callback;
-    std::vector<WindowStorage>  _windows;
-    static WindowMap            _windowMap;    /// Map from backend window pointers to user defined window types for all open windows
-
     #if GU2_BACKEND == GU2_BACKEND_SDL2
-    using SDLWindowIdMap = std::unordered_map<uint32_t, std::vector<WindowStorage>::size_type>;
-    SDLWindowIdMap              _sdlWindowIdMap; /// Map from SDL window id to event handler function pointers
-    #endif
+    using WindowId = uint32_t;
+    #elif GU2_BACKEND == GU2_BACKEND_GLFW
+    using WindowId = GLFWwindow*;
+    #endif // GU2_BACKEND
+    using WindowVector = std::vector<WindowId>;
+    using WindowMap = std::unordered_map<WindowId, WindowStorage>;
 
+    Callback            _callback;
+    WindowVector        _windows;
+    static WindowMap    _windowMap;    /// Map from backend window pointers to user defined window types for all open windows
 
     template <typename T_Window>
     static inline void windowHandleEvent(void* window, const Event& event);

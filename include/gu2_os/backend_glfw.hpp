@@ -43,14 +43,10 @@ struct WindowSettings {
     int         y       {Position::CENTERED};
 };
 
-namespace detail {
-
-using BackendWindow = GLFWwindow;
-
-} // namespace detail
 
 // Predefined GLFW objects
-using WindowObject = CObjectWrapper<detail::BackendWindow, glfwCreateWindow, glfwDestroyWindow>;
+using WindowObject = CObjectWrapper<GLFWwindow, glfwCreateWindow, glfwDestroyWindow>;
+
 
 namespace detail {
 

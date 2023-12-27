@@ -11,16 +11,19 @@
 template<typename T_Derived>
 void EventHandler::addWindow(Window<T_Derived>* window)
 {
-    _windows.emplace_back(
-        window->_window.get(),
+    #if GU2_BACKEND == GU2_BACKEND_SDL2
+    WindowId windowId = SDL_GetWindowID(window->_window.get());
+    #elif GU2_BACKEND == GU2_BACKEND_GLFW
+    WindowId windowId = window->_window.get();
+    #endif
+    _windows.emplace_back(windowId);
+    _windowMap.emplace(std::make_pair<WindowId, WindowStorage>(
+        std::move(windowId), {
+        window,
         &windowHandleEvent<T_Derived>,
         &windowIsOpen<Window<T_Derived>>
-    );
-    _windowMap[window->_window.get()] = window;
-
-    #if GU2_BACKEND == GU2_BACKEND_SDL2
-    _sdlWindowIdMap[SDL_GetWindowID(window->_window.get())] = _windows.size() - 1;
-    #elif GU2_BACKEND == GU2_BACKEND_GLFW
+    }));
+    #if GU2_BACKEND == GU2_BACKEND_GLFW
     glfwSetWindowCloseCallback(window->_window.get(), &pushGLFWWindowCloseEvent<T_Derived>);
     #endif
 }
@@ -34,7 +37,7 @@ void EventHandler::pushGLFWWindowCloseEvent(GLFWwindow* window)
     event.type = gu2::Event::WINDOW;
     event.window.event = gu2::WINDOWEVENT_CLOSE;
 
-    static_cast<T_Window*>(_windowMap.at(window))->handleEvent(event);
+    static_cast<T_Window*>(_windowMap.at(window).window)->handleEvent(event);
 }
 
 #endif
