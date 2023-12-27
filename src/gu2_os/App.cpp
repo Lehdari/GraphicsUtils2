@@ -1,6 +1,6 @@
 //
 // Project: GraphicsUtils2
-// File: EventHandler.cpp
+// File: App.cpp
 //
 // Copyright (c) 2023 Miika 'Lehdari' Lehtimäki
 // You may use, distribute and modify this code under the terms
@@ -8,22 +8,17 @@
 // with this source code package.
 //
 
-#include "EventHandler.hpp"
+#include "App.hpp"
 #include "Window.hpp"
 
 
 using namespace gu2;
 
 
-EventHandler::WindowMap EventHandler::_windowMap;
+App::WindowMap App::_windowMap;
 
 
-EventHandler::EventHandler(EventHandler::Callback callback) :
-    _callback   (callback)
-{
-}
-
-bool EventHandler::operator()()
+bool App::update()
 {
     #if GU2_BACKEND == GU2_BACKEND_SDL2
     SDL_Event sdlEvent;
@@ -41,9 +36,8 @@ bool EventHandler::operator()()
 
     // TODO remove closed windows from _windows vector (and _windowMap)
 
-    for (const auto& windowId : _windows) {
-        const auto& window = _windowMap.at(windowId);
-        if (window.isOpen(window.window))
+    for (const auto& [windowId, windowStorage] : _windowMap) {
+        if (windowStorage.isOpen(windowStorage.window))
             return true;
     }
 
@@ -52,7 +46,7 @@ bool EventHandler::operator()()
 
 #if GU2_BACKEND == GU2_BACKEND_SDL2
 
-Event EventHandler::convertSDLEvent(const SDL_Event& sdlEvent)
+Event App::convertSDLEvent(const SDL_Event& sdlEvent)
 {
     Event event;
     switch (sdlEvent.type) {

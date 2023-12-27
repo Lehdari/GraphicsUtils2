@@ -1,6 +1,6 @@
 //
 // Project: GraphicsUtils2
-// File: EventHandler.inl
+// File: App.inl
 //
 // Copyright (c) 2023 Miika 'Lehdari' Lehtimäki
 // You may use, distribute and modify this code under the terms
@@ -9,14 +9,13 @@
 //
 
 template<typename T_Derived>
-void EventHandler::addWindow(Window<T_Derived>* window)
+void App::addWindow(Window<T_Derived>* window)
 {
     #if GU2_BACKEND == GU2_BACKEND_SDL2
     WindowId windowId = SDL_GetWindowID(window->_window.get());
     #elif GU2_BACKEND == GU2_BACKEND_GLFW
     WindowId windowId = window->_window.get();
     #endif
-    _windows.emplace_back(windowId);
     _windowMap.emplace(std::make_pair<WindowId, WindowStorage>(
         std::move(windowId), {
         window,
@@ -31,7 +30,7 @@ void EventHandler::addWindow(Window<T_Derived>* window)
 #if GU2_BACKEND == GU2_BACKEND_GLFW
 
 template <typename T_Window>
-void EventHandler::pushGLFWWindowCloseEvent(GLFWwindow* window)
+void App::pushGLFWWindowCloseEvent(GLFWwindow* window)
 {
     Event event;
     event.type = gu2::Event::WINDOW;
@@ -43,13 +42,13 @@ void EventHandler::pushGLFWWindowCloseEvent(GLFWwindow* window)
 #endif
 
 template<typename T_Window>
-void EventHandler::windowHandleEvent(void* window, const Event& event)
+void App::windowHandleEvent(void* window, const Event& event)
 {
     static_cast<T_Window*>(window)->handleEvent(event);
 }
 
 template<typename T_Window>
-bool EventHandler::windowIsOpen(void* window)
+bool App::windowIsOpen(void* window)
 {
     return static_cast<T_Window*>(window)->isOpen();
 }

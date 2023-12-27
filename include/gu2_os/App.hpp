@@ -1,6 +1,6 @@
 //
 // Project: GraphicsUtils2
-// File: EventHandler.hpp
+// File: App.hpp
 //
 // Copyright (c) 2023 Miika 'Lehdari' Lehtimäki
 // You may use, distribute and modify this code under the terms
@@ -24,17 +24,13 @@ template <typename T_Derived>
 class Window;
 
 
-class EventHandler {
+class App {
 public:
-    using Callback = void(*)(const Event&);
-
-    EventHandler(Callback callback = nullptr);
-
     template <typename T_Derived>
-    void addWindow(Window<T_Derived>* window);
+    static void addWindow(Window<T_Derived>* window);
 
     // Returns false if all windows have been closed
-    bool operator()();
+    static bool update();
 
     #if GU2_BACKEND == GU2_BACKEND_GLFW
     template <typename T_Window>
@@ -57,12 +53,12 @@ private:
     #elif GU2_BACKEND == GU2_BACKEND_GLFW
     using WindowId = GLFWwindow*;
     #endif // GU2_BACKEND
-    using WindowVector = std::vector<WindowId>;
     using WindowMap = std::unordered_map<WindowId, WindowStorage>;
 
-    Callback            _callback;
-    WindowVector        _windows;
     static WindowMap    _windowMap;    /// Map from backend window pointers to user defined window types for all open windows
+
+    // App provides a fully static interface
+    App() = default;
 
     template <typename T_Window>
     static inline void windowHandleEvent(void* window, const Event& event);
@@ -75,6 +71,6 @@ private:
     #endif
 };
 
-#include "EventHandler.inl"
+#include "App.inl"
 
 } // namespace gu2

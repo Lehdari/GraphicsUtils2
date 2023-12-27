@@ -34,7 +34,7 @@ public:
     void handleEvent(const Event& event);
     void render();
 
-    friend class EventHandler;
+    friend class App;
 protected:
     Settings        _settings;
 

@@ -8,7 +8,7 @@
 // with this source code package.
 //
 
-#include <gu2_os/EventHandler.hpp>
+#include <gu2_os/App.hpp>
 #include <gu2_os/Window.hpp>
 
 
@@ -58,12 +58,11 @@ int main(void)
     settings2.h = 600;
     MyWindow window2(settings2);
 
-    gu2::EventHandler eventHandler;
-    eventHandler.addWindow(&window1);
-    eventHandler.addWindow(&window2);
+    gu2::App::addWindow(&window1);
+    gu2::App::addWindow(&window2);
 
     // Main loop
-    while (eventHandler());
+    while (gu2::App::update());
 
     return 0;
 }
