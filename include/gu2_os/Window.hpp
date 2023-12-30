@@ -17,6 +17,10 @@
 #include <string>
 
 
+// Macro enforcing CRTP usage
+#define GU2_WINDOW(WINDOW_TYPE) class WINDOW_TYPE : public gu2::Window<WINDOW_TYPE>
+
+
 namespace gu2 {
 
 #if GU2_BACKEND == GU2_BACKEND_SDL2
