@@ -23,6 +23,9 @@
 
 namespace gu2 {
 
+class Event;
+
+
 #if GU2_BACKEND == GU2_BACKEND_SDL2
 
 using WindowId = uint32_t;
@@ -65,5 +68,6 @@ protected:
 
 
 #include "Window.inl"
+
 
 } // namespace gu2
