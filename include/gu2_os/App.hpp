@@ -12,6 +12,7 @@
 
 #include "backend.hpp"
 #include "Event.hpp"
+#include "Window.hpp"
 
 #include <cstdint>
 #include <vector>
@@ -19,10 +20,6 @@
 
 
 namespace gu2 {
-
-template <typename T_Derived>
-class Window;
-
 
 class App {
 public:
@@ -48,11 +45,6 @@ private:
         WindowIsOpenFunction        isOpen;
     };
 
-    #if GU2_BACKEND == GU2_BACKEND_SDL2
-    using WindowId = uint32_t;
-    #elif GU2_BACKEND == GU2_BACKEND_GLFW
-    using WindowId = GLFWwindow*;
-    #endif // GU2_BACKEND
     using WindowMap = std::unordered_map<WindowId, WindowStorage>;
 
     static WindowMap    _windowMap;    /// Map from backend window pointers to user defined window types for all open windows

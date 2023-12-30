@@ -11,7 +11,12 @@
 template <typename T_Derived>
 Window<T_Derived>::Window(const WindowSettings& settings) :
     _settings   (settings),
-    _window     (detail::createWindowObject(_settings))
+    _window     (detail::createWindowObject(_settings)),
+#if GU2_BACKEND == GU2_BACKEND_SDL2
+    _id         (SDL_GetWindowID(_window.get()))
+#elif GU2_BACKEND == GU2_BACKEND_GLFW
+    _id         (_window.get())
+#endif
 {
 }
 
@@ -25,6 +30,12 @@ template <typename T_Derived>
 const WindowSettings& Window<T_Derived>::getSettings() const
 {
     return _settings;
+}
+
+template<typename T_Derived>
+WindowId Window<T_Derived>::getId() const
+{
+    return _id;
 }
 
 template<typename T_Derived>
