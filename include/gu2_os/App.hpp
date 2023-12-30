@@ -65,10 +65,6 @@ private:
 
     template <typename T_Window>
     static inline bool windowIsOpen(void* window);
-
-    #if GU2_BACKEND == GU2_BACKEND_SDL2
-    static Event convertSDLEvent(const SDL_Event& sdlEvent);
-    #endif
 };
 
 #include "App.inl"

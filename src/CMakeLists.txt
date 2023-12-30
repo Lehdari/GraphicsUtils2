@@ -2,6 +2,7 @@ macro(add_gu2_os_lib libname)
     # Library sources
     set(GU2_OS_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/gu2_os/App.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gu2_os/Event.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/gu2_os/${GU2_BACKEND_SOURCE_FILE}
     )
 

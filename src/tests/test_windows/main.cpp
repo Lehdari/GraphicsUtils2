@@ -26,7 +26,7 @@ public:
         switch (event.type) {
             case gu2::Event::WINDOW:
                 switch (event.window.event) {
-                    case gu2::WINDOWEVENT_CLOSE: close(); return;
+                    case gu2::WindowEventID::CLOSE: close(); return;
                 }
                 break;
             default: break;

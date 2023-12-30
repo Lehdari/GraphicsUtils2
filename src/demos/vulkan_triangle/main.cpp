@@ -27,7 +27,23 @@ public:
         switch (event.type) {
             case gu2::Event::WINDOW:
                 switch (event.window.event) {
-                    case gu2::WINDOWEVENT_CLOSE: close(); return;
+                    case gu2::WindowEventID::CLOSE: close(); return;
+                    default: break;
+                }
+                break;
+            case gu2::Event::KEY:
+                switch (event.key.state) {
+                    case gu2::KeyEventState::PRESSED:
+                        printf("pressed, "); break;
+                    case gu2::KeyEventState::RELEASED:
+                        printf("released, "); break;
+                    case gu2::KeyEventState::REPEATED:
+                        printf("repeated, "); break;
+                }
+                printf("keycode: %c\n", event.key.sym.keycode);
+                switch (event.key.sym.scancode) {
+                    case gu2::ScanCode::ESCAPE: close(); return;
+                    default: break;
                 }
                 break;
             default: break;

@@ -24,10 +24,16 @@ bool App::update()
     SDL_Event sdlEvent;
     while (SDL_PollEvent(&sdlEvent)) {
         switch (sdlEvent.type) {
-            case SDL_WINDOWEVENT: {
+            case SDL_WINDOWEVENT:
+            case SDL_KEYUP:
+            case SDL_KEYDOWN:
+            {
                 auto& window = _windowMap.at(sdlEvent.window.windowID);
-                window.handleEvent(window.window, convertSDLEvent(sdlEvent));
+                window.handleEvent(window.window, gu2::Event(sdlEvent));
             }   break;
+            default:
+                // TODO add event to generic event queue
+                break;
         }
     }
     #elif GU2_BACKEND == GU2_BACKEND_GLFW
@@ -43,26 +49,3 @@ bool App::update()
 
     return false;
 }
-
-#if GU2_BACKEND == GU2_BACKEND_SDL2
-
-Event App::convertSDLEvent(const SDL_Event& sdlEvent)
-{
-    Event event;
-    switch (sdlEvent.type) {
-        case SDL_WINDOWEVENT: {
-            event.type = Event::WINDOW;
-            switch (sdlEvent.window.event) {
-                case SDL_WINDOWEVENT_CLOSE:
-                    event.window.event = WINDOWEVENT_CLOSE; break;
-                default:
-                    event.window.event = WINDOWEVENT_NONE;
-            }
-        }   break;
-        default:
-            event.type = Event::UNDEFINED;
-    }
-    return event;
-}
-
-#endif // GU2_BACKEND

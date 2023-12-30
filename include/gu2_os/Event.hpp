@@ -12,23 +12,50 @@
 
 
 #include "backend.hpp"
+#include "KeyCode.hpp"
 
 
 namespace gu2 {
 
-enum WindowEventID : uint8_t {
-    WINDOWEVENT_NONE,
-    WINDOWEVENT_CLOSE
+enum class WindowEventID : uint8_t {
+    NONE,
+    CLOSE
 };
 
 struct WindowEvent {
     WindowEventID   event;
 };
 
+enum class KeyEventState : uint8_t {
+    PRESSED,
+    RELEASED,
+    REPEATED
+};
+
+struct KeySym {
+    ScanCode    scancode;
+    KeyCode     keycode;
+    uint16_t    mods;
+
+#if GU2_BACKEND == GU2_BACKEND_SDL2
+    KeySym(const SDL_Keysym& sym);
+#endif // GU2_BACKEND
+};
+
+struct KeyEvent {
+    KeyEventState   state;
+    KeySym          sym;
+
+#if GU2_BACKEND == GU2_BACKEND_SDL2
+    KeyEvent(const SDL_KeyboardEvent& sdlKeyboardEvent, uint32_t sdlEventType);
+#endif // GU2_BACKEND
+};
+
 struct Event {
     enum Type : uint32_t {
         UNDEFINED,
         WINDOW,
+        KEY,
         QUIT
     };
 
@@ -36,7 +63,12 @@ struct Event {
 
     union {
         WindowEvent window;
+        KeyEvent    key;
     };
+
+#if GU2_BACKEND == GU2_BACKEND_SDL2
+    Event(const SDL_Event& sdlEvent);
+#endif // GU2_BACKEND
 };
 
 } // namespace gu2
