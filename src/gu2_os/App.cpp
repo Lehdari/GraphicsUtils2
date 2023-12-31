@@ -28,6 +28,8 @@ bool App::update()
             case SDL_KEYUP:
             case SDL_KEYDOWN:
             {
+                if (!_windowMap.contains(sdlEvent.window.windowID))
+                    break;
                 auto& window = _windowMap.at(sdlEvent.window.windowID);
                 window.handleEvent(window.window, gu2::Event(sdlEvent));
             }   break;
