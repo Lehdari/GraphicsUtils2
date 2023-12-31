@@ -632,6 +632,26 @@ enum class KeyCode : uint32_t
     SLEEP = scanCodeToKeyCode(gu2::ScanCode::SLEEP)
 };
 
+enum class KeyMod : uint16_t
+{
+    NONE = 0x0000,
+    LSHIFT = 0x0001,
+    RSHIFT = 0x0002,
+    LCTRL = 0x0040,
+    RCTRL = 0x0080,
+    LALT = 0x0100,
+    RALT = 0x0200,
+    LSUPER = 0x0400,
+    RSUPER = 0x0800,
+    NUM_LOCK = 0x1000,
+    CAPS_LOCK = 0x2000,
+    MODE = 0x4000,
+    SCROLL_LOCK = 0x8000,
 
+    CTRL = KeyMod::LCTRL | KeyMod::RCTRL,
+    SHIFT = KeyMod::LSHIFT | KeyMod::RSHIFT,
+    ALT = KeyMod::LALT | KeyMod::RALT,
+    SUPER = KeyMod::LSUPER | KeyMod::RSUPER
+};
 
 } // namespace gu2

@@ -22,19 +22,31 @@ void App::addWindow(Window<T_Derived>* window)
         &windowHandleEvent<T_Derived>,
         &windowIsOpen<Window<T_Derived>>
     }));
+
     #if GU2_BACKEND == GU2_BACKEND_GLFW
-    glfwSetWindowCloseCallback(window->_window.get(), &pushGLFWWindowCloseEvent<T_Derived>);
+    glfwSetWindowCloseCallback(window->_window.get(), &windowCloseCallback<T_Derived>);
+    glfwSetKeyCallback(window->_window.get(), &keyCallback<T_Derived>);
     #endif
 }
 
 #if GU2_BACKEND == GU2_BACKEND_GLFW
 
 template <typename T_Window>
-void App::pushGLFWWindowCloseEvent(GLFWwindow* window)
+void App::windowCloseCallback(GLFWwindow* window)
 {
     Event event;
     event.type = gu2::Event::WINDOW;
     event.window.event = gu2::WindowEventID::CLOSE;
+
+    static_cast<T_Window*>(_windowMap.at(window).window)->handleEvent(event);
+}
+
+template <typename T_Window>
+void App::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    Event event;
+    event.type = gu2::Event::KEY;
+    event.key = KeyEvent(key, scancode, action, mods);
 
     static_cast<T_Window*>(_windowMap.at(window).window)->handleEvent(event);
 }

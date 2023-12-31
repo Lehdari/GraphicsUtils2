@@ -31,7 +31,9 @@ public:
 
     #if GU2_BACKEND == GU2_BACKEND_GLFW
     template <typename T_Window>
-    static inline void pushGLFWWindowCloseEvent(GLFWwindow* window);
+    static inline void windowCloseCallback(GLFWwindow* window);
+    template <typename T_Window>
+    static inline void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
     #endif
 
 private:

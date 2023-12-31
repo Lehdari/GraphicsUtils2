@@ -35,10 +35,13 @@ enum class KeyEventState : uint8_t {
 struct KeySym {
     ScanCode    scancode;
     KeyCode     keycode;
-    uint16_t    mods;
+    KeyMod      mod;
 
+    KeySym() = default;
 #if GU2_BACKEND == GU2_BACKEND_SDL2
     KeySym(const SDL_Keysym& sym);
+#elif GU2_BACKEND == GU2_BACKEND_GLFW
+    KeySym(int key, int scancode, int mods);
 #endif // GU2_BACKEND
 };
 
@@ -46,8 +49,11 @@ struct KeyEvent {
     KeyEventState   state;
     KeySym          sym;
 
+    KeyEvent() = default;
 #if GU2_BACKEND == GU2_BACKEND_SDL2
     KeyEvent(const SDL_KeyboardEvent& sdlKeyboardEvent, uint32_t sdlEventType);
+#elif GU2_BACKEND == GU2_BACKEND_GLFW
+    KeyEvent(int key, int scancode, int action, int mods);
 #endif // GU2_BACKEND
 };
 
