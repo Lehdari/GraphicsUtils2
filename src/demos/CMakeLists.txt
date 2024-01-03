@@ -3,5 +3,8 @@ set(VULKAN_TRIANGLE_SOURCES
 )
 
 add_executable(demo_vulkan_triangle ${VULKAN_TRIANGLE_SOURCES})
-target_link_libraries(demo_vulkan_triangle gu2::os)
+target_link_libraries(demo_vulkan_triangle
+    PUBLIC  gu2::os
+    PUBLIC  vulkan
+)
 set_property(TARGET demo_vulkan_triangle PROPERTY CXX_STANDARD 20)
