@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include <vector>
+
 
 #define GU2_BACKEND_SDL2 1
 #define GU2_BACKEND_GLFW 2
@@ -33,6 +35,9 @@
 
 namespace gu2 {
 
-void sleep(uint32_t ms);
+/// Wrapper for getting required backend vulkan instance extensions
+std::vector<const char*> getVulkanInstanceExtensions();
+
+void sleep(uint32_t ms); // TODO maybe move elsewhere?
 
 } // namespace gu2
