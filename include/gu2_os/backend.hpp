@@ -35,9 +35,6 @@
 
 namespace gu2 {
 
-/// Wrapper for getting required backend vulkan instance extensions
-std::vector<const char*> getVulkanInstanceExtensions();
-
 void sleep(uint32_t ms); // TODO maybe move elsewhere?
 
 } // namespace gu2
