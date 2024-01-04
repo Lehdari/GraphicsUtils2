@@ -1,3 +1,4 @@
+# gu2::os
 macro(add_gu2_os_lib libname)
     # Library sources
     set(GU2_OS_SOURCES
@@ -31,6 +32,20 @@ endmacro()
 add_gu2_os_lib(gu2_os)
 add_library(gu2::os ALIAS gu2_os)
 
+
+# gu2::vulkan
+add_library(gu2_vulkan INTERFACE)
+target_link_libraries(gu2_vulkan
+    INTERFACE   vulkan
+)
+target_include_directories(gu2_vulkan
+    INTERFACE   $<BUILD_INTERFACE:${GU2_INCLUDE_DIR}> $<INSTALL_INTERFACE:include>
+    INTERFACE   ${GU2_INCLUDE_DIR}/gu2_vulkan
+)
+add_library(gu2::vulkan ALIAS gu2_vulkan)
+
+
+# Tests
 if(${GU2_ENABLE_TESTS})
     # build versions of gu2_os with every backend for tests
     foreach(backend ${GU2_BACKEND_OPTIONS})
@@ -39,6 +54,7 @@ if(${GU2_ENABLE_TESTS})
     endforeach()
     add_subdirectory(tests)
 endif()
+
 
 # Demos (TODO: add option for disabling these)
 add_subdirectory(demos)
