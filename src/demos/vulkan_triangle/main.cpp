@@ -10,12 +10,14 @@
 
 #include <gu2_os/App.hpp>
 #include <gu2_os/Window.hpp>
+#include <gu2_vulkan/backend.hpp>
 #include <gu2_vulkan/QueryWrapper.hpp>
 
 #include <vulkan/vulkan.h>
 
 #include <cstring>
 #include <optional>
+#include <set>
 
 
 bool checkValidationLayerSupport(const std::vector<const char*>& validationLayers)
@@ -43,7 +45,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT messageType,
     const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-    void* pUserData) {
+    void* pUserData
+) {
 
     printf("Validation layer: %s\n", pCallbackData->pMessage);
 
@@ -91,9 +94,11 @@ struct VulkanSettings {
 
 struct VulkanQueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
+    std::optional<uint32_t> presentFamily;
 
-    bool isComplete() {
-        return graphicsFamily.has_value();
+    bool isComplete()
+    {
+        return graphicsFamily.has_value() && presentFamily.has_value();
     }
 };
 
@@ -111,10 +116,9 @@ public:
     ~VulkanWindow()
     {
         vkDestroyDevice(_vulkanDevice, nullptr);
-
         if (_vulkanSettings.enableValidationLayers)
             DestroyDebugUtilsMessengerEXT(_vulkanInstance, _vulkanDebugMessenger, nullptr);
-
+        vkDestroySurfaceKHR(_vulkanInstance, _vulkanSurface, nullptr);
         vkDestroyInstance(_vulkanInstance, nullptr);
     }
 
@@ -125,6 +129,7 @@ public:
         }
         createInstance();
         setupDebugMessenger();
+        createSurface();
         selectPhysicalDevice();
         createLogicalDevice();
     }
@@ -184,6 +189,13 @@ public:
         }
     }
 
+    void createSurface()
+    {
+        if (!gu2::createWindowVulkanSurface(_window, _vulkanInstance, nullptr, &_vulkanSurface)) {
+            throw std::runtime_error("failed to create window surface!");
+        }
+    }
+
     void selectPhysicalDevice()
     {
         auto devices = gu2::vkEnumeratePhysicalDevices(_vulkanInstance);
@@ -231,10 +243,15 @@ public:
 
         auto queueFamilies = gu2::vkGetPhysicalDeviceQueueFamilyProperties(device);
 
+        VkBool32 presentSupport = false;
         int i = 0;
         for (const auto& queueFamily : queueFamilies) {
             if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
                 indices.graphicsFamily = i;
+
+            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, _vulkanSurface, &presentSupport);
+            if (presentSupport)
+                indices.presentFamily = i; // might be the same as graphicsFamily, see https://vulkan-tutorial.com/Drawing_a_triangle/Presentation/Window_surface
 
             if (indices.isComplete())
                 break;
@@ -250,12 +267,20 @@ public:
         auto familyIndices = findQueueFamilies(_vulkanPhysicalDevice);
 
         // Graphics queue creation info
-        VkDeviceQueueCreateInfo queueCreateInfo{};
-        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queueCreateInfo.queueFamilyIndex = familyIndices.graphicsFamily.value();
-        queueCreateInfo.queueCount = 1;
+        std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+        std::set<uint32_t> uniqueQueueFamilies = {
+            familyIndices.graphicsFamily.value(), familyIndices.presentFamily.value()
+        };
+
         float queuePriority = 1.0f;
-        queueCreateInfo.pQueuePriorities = &queuePriority;
+        for (uint32_t queueFamily : uniqueQueueFamilies) {
+            VkDeviceQueueCreateInfo queueCreateInfo{};
+            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            queueCreateInfo.queueFamilyIndex = queueFamily;
+            queueCreateInfo.queueCount = 1;
+            queueCreateInfo.pQueuePriorities = &queuePriority;
+            queueCreateInfos.push_back(queueCreateInfo);
+        }
 
         // Device features to be used
         VkPhysicalDeviceFeatures deviceFeatures{};
@@ -263,8 +288,8 @@ public:
         // Logical device creation info
         VkDeviceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        createInfo.pQueueCreateInfos = &queueCreateInfo;
-        createInfo.queueCreateInfoCount = 1;
+        createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+        createInfo.pQueueCreateInfos = queueCreateInfos.data();
         createInfo.pEnabledFeatures = &deviceFeatures;
         createInfo.enabledExtensionCount = 0;
         if (_vulkanSettings.enableValidationLayers) { // ignored in modern vulkan implementations
@@ -278,6 +303,7 @@ public:
             throw std::runtime_error("failed to create logical device!");
 
         vkGetDeviceQueue(_vulkanDevice, familyIndices.graphicsFamily.value(), 0, &_vulkanGraphicsQueue);
+        vkGetDeviceQueue(_vulkanDevice, familyIndices.presentFamily.value(), 0, &_vulkanPresentQueue);
     }
 
     void handleEvent(const gu2::Event& event)
@@ -308,9 +334,11 @@ private:
     VulkanSettings              _vulkanSettings;
     VkInstance                  _vulkanInstance;
     VkDebugUtilsMessengerEXT    _vulkanDebugMessenger;
+    VkSurfaceKHR                _vulkanSurface;
     VkPhysicalDevice            _vulkanPhysicalDevice;
     VkDevice                    _vulkanDevice;
     VkQueue                     _vulkanGraphicsQueue;
+    VkQueue                     _vulkanPresentQueue;
 };
 
 
