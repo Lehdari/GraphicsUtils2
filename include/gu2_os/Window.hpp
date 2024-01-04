@@ -56,13 +56,10 @@ public:
     void render();
 
     friend class App;
+
 protected:
     Settings        _settings;
-
-private:
     WindowObject    _window;
-
-protected:
     WindowId        _id;
 };
 
