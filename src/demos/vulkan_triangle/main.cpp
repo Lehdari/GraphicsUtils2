@@ -2,7 +2,7 @@
 // Project: GraphicsUtils2
 // File: main.cpp
 //
-// Copyright (c) 2023 Miika 'Lehdari' Lehtimäki
+// Copyright (c) 2024 Miika 'Lehdari' Lehtimäki
 // You may use, distribute and modify this code under the terms
 // of the licence specified in file LICENSE which is distributed
 // with this source code package.
@@ -10,19 +10,17 @@
 
 #include <gu2_os/App.hpp>
 #include <gu2_os/Window.hpp>
+#include <gu2_vulkan/QueryWrapper.hpp>
 
 #include <vulkan/vulkan.h>
 
 #include <cstring>
+#include <optional>
 
 
 bool checkValidationLayerSupport(const std::vector<const char*>& validationLayers)
 {
-    uint32_t layerCount;
-    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-
-    std::vector<VkLayerProperties> availableLayers(layerCount);
-    vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+    std::vector<VkLayerProperties> availableLayers = gu2::vkEnumerateInstanceLayerProperties();
 
     for (const char* layerName : validationLayers) {
         bool layerFound = false;
@@ -86,10 +84,17 @@ void DestroyDebugUtilsMessengerEXT(
 }
 
 
-
 struct VulkanSettings {
     bool                        enableValidationLayers  {true};
     std::vector<const char*>    validationLayers        {"VK_LAYER_KHRONOS_validation"};
+};
+
+struct VulkanQueueFamilyIndices {
+    std::optional<uint32_t> graphicsFamily;
+
+    bool isComplete() {
+        return graphicsFamily.has_value();
+    }
 };
 
 
@@ -97,7 +102,8 @@ class VulkanWindow : public gu2::Window<VulkanWindow> {
 public:
     VulkanWindow(const gu2::WindowSettings& windowSettings, const VulkanSettings& vulkanSettings) :
         Window<VulkanWindow>    (windowSettings),
-        _vulkanSettings         (vulkanSettings)
+        _vulkanSettings         (vulkanSettings),
+        _vulkanPhysicalDevice   (VK_NULL_HANDLE)
     {
         initVulkan();
     }
@@ -117,18 +123,7 @@ public:
         }
         createInstance();
         setupDebugMessenger();
-    }
-
-    void setupDebugMessenger()
-    {
-        if (!_vulkanSettings.enableValidationLayers) return;
-
-        VkDebugUtilsMessengerCreateInfoEXT createInfo{};
-        populateDebugMessengerCreateInfo(createInfo);
-
-        if (CreateDebugUtilsMessengerEXT(_vulkanInstance, &createInfo, nullptr, &_vulkanDebugMessenger) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to set up debug messenger!");
-        }
+        selectPhysicalDevice();
     }
 
     void createInstance()
@@ -174,6 +169,79 @@ public:
         }
     }
 
+    void setupDebugMessenger()
+    {
+        if (!_vulkanSettings.enableValidationLayers) return;
+
+        VkDebugUtilsMessengerCreateInfoEXT createInfo{};
+        populateDebugMessengerCreateInfo(createInfo);
+
+        if (CreateDebugUtilsMessengerEXT(_vulkanInstance, &createInfo, nullptr, &_vulkanDebugMessenger) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to set up debug messenger!");
+        }
+    }
+
+    void selectPhysicalDevice()
+    {
+        auto devices = gu2::vkEnumeratePhysicalDevices(_vulkanInstance);
+        if (devices.empty())
+            throw std::runtime_error("Failed to find GPUs with Vulkan support!");
+
+        // Select the most suitable device
+        uint32_t maxSuitability = 0;
+        for (const auto& device : devices) {
+            uint32_t suitability = deviceSuitability(device);
+            if (suitability > maxSuitability) {
+                _vulkanPhysicalDevice = device;
+                maxSuitability = suitability;
+            }
+        }
+
+        if (_vulkanPhysicalDevice == VK_NULL_HANDLE) {
+            throw std::runtime_error("Failed to find a suitable GPU!");
+        }
+    }
+
+    uint32_t deviceSuitability(VkPhysicalDevice device)
+    {
+        VkPhysicalDeviceProperties deviceProperties;
+        vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+        VkPhysicalDeviceFeatures deviceFeatures;
+        vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+        // Rank the device according to its properties and features
+        uint32_t suitability = 1;
+        if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+            suitability += 1000;
+
+        auto familyIndices = findQueueFamilies(device);
+        if (!familyIndices.graphicsFamily.has_value())
+            suitability = 0; // No suitable queue family found
+
+        return suitability;
+    }
+
+    VulkanQueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
+    {
+        VulkanQueueFamilyIndices indices;
+
+        auto queueFamilies = gu2::vkGetPhysicalDeviceQueueFamilyProperties(device);
+
+        int i = 0;
+        for (const auto& queueFamily : queueFamilies) {
+            if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+                indices.graphicsFamily = i;
+
+            if (indices.isComplete())
+                break;
+
+            ++i;
+        }
+
+        return indices;
+    }
+
     void handleEvent(const gu2::Event& event)
     {
         switch (event.type) {
@@ -202,6 +270,7 @@ private:
     VulkanSettings              _vulkanSettings;
     VkInstance                  _vulkanInstance;
     VkDebugUtilsMessengerEXT    _vulkanDebugMessenger;
+    VkPhysicalDevice            _vulkanPhysicalDevice;
 };
 
 
