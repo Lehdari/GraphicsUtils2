@@ -110,6 +110,8 @@ public:
 
     ~VulkanWindow()
     {
+        vkDestroyDevice(_vulkanDevice, nullptr);
+
         if (_vulkanSettings.enableValidationLayers)
             DestroyDebugUtilsMessengerEXT(_vulkanInstance, _vulkanDebugMessenger, nullptr);
 
@@ -124,6 +126,7 @@ public:
         createInstance();
         setupDebugMessenger();
         selectPhysicalDevice();
+        createLogicalDevice();
     }
 
     void createInstance()
@@ -242,6 +245,41 @@ public:
         return indices;
     }
 
+    void createLogicalDevice()
+    {
+        auto familyIndices = findQueueFamilies(_vulkanPhysicalDevice);
+
+        // Graphics queue creation info
+        VkDeviceQueueCreateInfo queueCreateInfo{};
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.queueFamilyIndex = familyIndices.graphicsFamily.value();
+        queueCreateInfo.queueCount = 1;
+        float queuePriority = 1.0f;
+        queueCreateInfo.pQueuePriorities = &queuePriority;
+
+        // Device features to be used
+        VkPhysicalDeviceFeatures deviceFeatures{};
+
+        // Logical device creation info
+        VkDeviceCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        createInfo.pQueueCreateInfos = &queueCreateInfo;
+        createInfo.queueCreateInfoCount = 1;
+        createInfo.pEnabledFeatures = &deviceFeatures;
+        createInfo.enabledExtensionCount = 0;
+        if (_vulkanSettings.enableValidationLayers) { // ignored in modern vulkan implementations
+            createInfo.enabledLayerCount = static_cast<uint32_t>(_vulkanSettings.validationLayers.size());
+            createInfo.ppEnabledLayerNames = _vulkanSettings.validationLayers.data();
+        }
+        else
+            createInfo.enabledLayerCount = 0;
+
+        if (vkCreateDevice(_vulkanPhysicalDevice, &createInfo, nullptr, &_vulkanDevice) != VK_SUCCESS)
+            throw std::runtime_error("failed to create logical device!");
+
+        vkGetDeviceQueue(_vulkanDevice, familyIndices.graphicsFamily.value(), 0, &_vulkanGraphicsQueue);
+    }
+
     void handleEvent(const gu2::Event& event)
     {
         switch (event.type) {
@@ -271,6 +309,8 @@ private:
     VkInstance                  _vulkanInstance;
     VkDebugUtilsMessengerEXT    _vulkanDebugMessenger;
     VkPhysicalDevice            _vulkanPhysicalDevice;
+    VkDevice                    _vulkanDevice;
+    VkQueue                     _vulkanGraphicsQueue;
 };
 
 
