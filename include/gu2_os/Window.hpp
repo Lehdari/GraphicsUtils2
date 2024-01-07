@@ -66,5 +66,4 @@ protected:
 
 #include "Window.inl"
 
-
 } // namespace gu2

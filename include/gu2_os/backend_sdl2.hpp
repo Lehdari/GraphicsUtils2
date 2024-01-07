@@ -46,10 +46,4 @@ struct WindowSettings {
 // Predefined SDL objects
 using WindowObject = CObjectWrapper<SDL_Window, SDL_CreateWindow, SDL_DestroyWindow>;
 
-
-namespace detail {
-
-WindowObject createWindowObject(const WindowSettings& settings);
-
-} // namespace detail
 } // namespace gu2

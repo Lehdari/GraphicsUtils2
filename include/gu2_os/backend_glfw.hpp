@@ -47,10 +47,4 @@ struct WindowSettings {
 // Predefined GLFW objects
 using WindowObject = CObjectWrapper<GLFWwindow, glfwCreateWindow, glfwDestroyWindow>;
 
-
-namespace detail {
-
-WindowObject createWindowObject(const WindowSettings& settings);
-
-} // namespace detail
 } // namespace gu2

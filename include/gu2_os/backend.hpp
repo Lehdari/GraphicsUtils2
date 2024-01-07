@@ -34,6 +34,12 @@
 
 
 namespace gu2 {
+namespace detail {
+
+WindowObject createWindowObject(const WindowSettings& settings);
+
+} // namespace detail
+
 
 void sleep(uint32_t ms); // TODO maybe move elsewhere?
 
