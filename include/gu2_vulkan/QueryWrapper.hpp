@@ -43,8 +43,12 @@ inline std::vector<T_Data> vkQuery(T_QueryFunction query, T_Args&&... args)
 
 
 // Predefined query wrappers
+GU2_VULKAN_QUERY_WRAPPER(VkExtensionProperties, vkEnumerateDeviceExtensionProperties)
 GU2_VULKAN_QUERY_WRAPPER(VkLayerProperties, vkEnumerateInstanceLayerProperties)
 GU2_VULKAN_QUERY_WRAPPER(VkPhysicalDevice, vkEnumeratePhysicalDevices)
 GU2_VULKAN_QUERY_WRAPPER(VkQueueFamilyProperties, vkGetPhysicalDeviceQueueFamilyProperties)
+GU2_VULKAN_QUERY_WRAPPER(VkSurfaceFormatKHR, vkGetPhysicalDeviceSurfaceFormatsKHR)
+GU2_VULKAN_QUERY_WRAPPER(VkPresentModeKHR, vkGetPhysicalDeviceSurfacePresentModesKHR)
+GU2_VULKAN_QUERY_WRAPPER(VkImage, vkGetSwapchainImagesKHR)
 
 } // namespace gu2
