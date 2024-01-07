@@ -27,6 +27,7 @@ struct WindowEvent {
 };
 
 enum class KeyEventState : uint8_t {
+    UNKNOWN,
     PRESSED,
     RELEASED,
     REPEATED

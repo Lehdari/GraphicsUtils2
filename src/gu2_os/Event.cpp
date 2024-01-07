@@ -85,7 +85,10 @@ namespace {
             case GLFW_PRESS: return KeyEventState::PRESSED;
             case GLFW_RELEASE: return KeyEventState::RELEASED;
             case GLFW_REPEAT: return KeyEventState::REPEATED;
+            default:
+                return KeyEventState::UNKNOWN;
         }
+        return KeyEventState::UNKNOWN;
     }
 
     inline void storeGLFWKeyMapValues(int key, KeyCode* keyCodeMapIndex, ScanCode* scanCodeMapIndex)
