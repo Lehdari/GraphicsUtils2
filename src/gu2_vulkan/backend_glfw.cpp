@@ -41,3 +41,8 @@ bool gu2::createWindowVulkanSurface(
 {
     return glfwCreateWindowSurface(instance, window.get(), allocator, surface) == VK_SUCCESS;
 }
+
+void gu2::getWindowFramebufferSize(WindowObject& window, int* w, int* h)
+{
+    glfwGetFramebufferSize(window.get(), w, h);
+}
