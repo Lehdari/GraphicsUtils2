@@ -19,6 +19,7 @@ using namespace gu2;
 WindowObject detail::createWindowObject(const WindowSettings& settings)
 {
     glfwInit();
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     return {settings.w, settings.h, settings.name.c_str(), nullptr, nullptr};
 }
 
