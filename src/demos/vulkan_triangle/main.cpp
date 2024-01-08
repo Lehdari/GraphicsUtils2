@@ -147,6 +147,9 @@ public:
 
     ~VulkanWindow()
     {
+        for (auto& framebuffer : _vulkanSwapChainFramebuffers) {
+            vkDestroyFramebuffer(_vulkanDevice, framebuffer, nullptr);
+        }
         vkDestroyPipeline(_vulkanDevice, _vulkanGraphicsPipeline, nullptr);
         vkDestroyPipelineLayout(_vulkanDevice, _vulkanPipelineLayout, nullptr);
         vkDestroyRenderPass(_vulkanDevice, _vulkanRenderPass, nullptr);
@@ -175,6 +178,7 @@ public:
         createImageViews();
         createRenderPass();
         createGraphicsPipeline();
+        createFramebuffers();
     }
 
     void createInstance()
@@ -693,6 +697,26 @@ public:
         vkDestroyShaderModule(_vulkanDevice, vertShaderModule, nullptr);
     }
 
+    void createFramebuffers()
+    {
+        _vulkanSwapChainFramebuffers.resize(_vulkanSwapChainImageViews.size());
+
+        for (size_t i = 0; i < _vulkanSwapChainImageViews.size(); i++) {
+            VkFramebufferCreateInfo framebufferInfo{};
+            framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            framebufferInfo.renderPass = _vulkanRenderPass;
+            framebufferInfo.attachmentCount = 1;
+            framebufferInfo.pAttachments = &_vulkanSwapChainImageViews[i];
+            framebufferInfo.width = _vulkanSwapChainExtent.width;
+            framebufferInfo.height = _vulkanSwapChainExtent.height;
+            framebufferInfo.layers = 1;
+
+            if (vkCreateFramebuffer(_vulkanDevice, &framebufferInfo, nullptr, &_vulkanSwapChainFramebuffers[i]) != VK_SUCCESS) {
+                throw std::runtime_error("failed to create framebuffer!");
+            }
+        }
+    }
+
     void handleEvent(const gu2::Event& event)
     {
         switch (event.type) {
@@ -734,6 +758,7 @@ private:
     VkRenderPass                _vulkanRenderPass;
     VkPipelineLayout            _vulkanPipelineLayout;
     VkPipeline                  _vulkanGraphicsPipeline;
+    std::vector<VkFramebuffer>  _vulkanSwapChainFramebuffers;
 };
 
 
