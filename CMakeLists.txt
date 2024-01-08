@@ -15,6 +15,9 @@ gu2_select_backend(${GU2_BACKEND})
 # Fetch 3rd party dependencies
 add_subdirectory(ext)
 
+# Required for shader installation
+set(GU2_SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shader)
+
 # Include directory to use for build tree
 set(GU2_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 

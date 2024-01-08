@@ -61,6 +61,12 @@ macro(gu2_add_vulkan_lib libname) # macro for generating versions for different 
         PUBLIC  -DGU2_BACKEND_NAME=\"${GU2_BACKEND}\"
     )
     set_property(TARGET ${libname} PROPERTY CXX_STANDARD 20)
+    add_custom_command(
+        TARGET ${libname} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${GU2_SHADER_DIR} $<TARGET_FILE_DIR:${libname}>/shader
+        COMMENT "Copying shaders" VERBATIM
+    )
 endmacro()
 
 gu2_add_vulkan_lib(gu2_vulkan)
