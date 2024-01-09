@@ -947,12 +947,11 @@ int main(void)
     vulkanSettings.enableValidationLayers = true;
     #endif
 
-    VulkanWindow window(windowSettings, vulkanSettings);
-
-    gu2::App::addWindow(&window);
-
     // Main loop
     try {
+        VulkanWindow window(windowSettings, vulkanSettings);
+        gu2::App::addWindow(&window);
+
         while (gu2::App::update());
     }
     catch (const std::exception& e) {

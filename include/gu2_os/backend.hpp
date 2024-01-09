@@ -38,6 +38,9 @@ namespace detail {
 
 WindowObject createWindowObject(const WindowSettings& settings);
 
+// Number of active windows, used for error checking in cleanupBackend
+extern uint64_t nActiveWindows;
+
 } // namespace detail
 
 

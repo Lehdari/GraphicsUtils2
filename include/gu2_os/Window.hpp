@@ -45,6 +45,7 @@ public:
     using Settings = WindowSettings;
 
     Window(const Settings& settings = Settings());
+    ~Window();
 
     void close();
 

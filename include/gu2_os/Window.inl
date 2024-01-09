@@ -18,6 +18,13 @@ Window<T_Derived>::Window(const WindowSettings& settings) :
     _id         (_window.get())
     #endif
 {
+    ++gu2::detail::nActiveWindows;
+}
+
+template<typename T_Derived>
+Window<T_Derived>::~Window()
+{
+    --gu2::detail::nActiveWindows;
 }
 
 template<typename T_Derived>

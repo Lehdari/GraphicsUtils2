@@ -16,6 +16,9 @@
 using namespace gu2;
 
 
+uint64_t gu2::detail::nActiveWindows = 0;
+
+
 WindowObject detail::createWindowObject(const WindowSettings& settings)
 {
     glfwInit();
@@ -30,5 +33,9 @@ void gu2::sleep(uint32_t ms)
 
 void gu2::cleanupBackend()
 {
+    if (gu2::detail::nActiveWindows > 0)
+        throw std::runtime_error("cleanupBackend() called with active windows (" +
+            std::to_string(gu2::detail::nActiveWindows) + ")");
+
     glfwTerminate();
 }
