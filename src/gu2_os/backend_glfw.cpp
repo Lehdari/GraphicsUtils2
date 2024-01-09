@@ -27,3 +27,8 @@ void gu2::sleep(uint32_t ms)
 {
     std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
+
+void gu2::cleanupBackend()
+{
+    glfwTerminate();
+}

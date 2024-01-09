@@ -960,5 +960,7 @@ int main(void)
         return EXIT_FAILURE;
     }
 
+    gu2::cleanupBackend();
+
     return EXIT_SUCCESS;
 }

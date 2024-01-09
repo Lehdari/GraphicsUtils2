@@ -111,7 +111,9 @@ int main(void)
 
     // Main loop, should return after 1 update
     if (gu2::App::update())
-        return 1;
+        return EXIT_FAILURE;
 
-    return 0;
+    gu2::cleanupBackend();
+
+    return EXIT_SUCCESS;
 }

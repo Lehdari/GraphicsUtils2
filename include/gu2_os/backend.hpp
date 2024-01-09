@@ -43,4 +43,6 @@ WindowObject createWindowObject(const WindowSettings& settings);
 
 void sleep(uint32_t ms); // TODO maybe move elsewhere?
 
+void cleanupBackend();
+
 } // namespace gu2
