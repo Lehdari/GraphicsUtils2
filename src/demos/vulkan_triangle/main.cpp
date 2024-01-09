@@ -116,6 +116,7 @@ struct VulkanSettings {
     bool                        enableValidationLayers  {true};
     std::vector<const char*>    validationLayers        {"VK_LAYER_KHRONOS_validation"};
     std::vector<const char*>    deviceExtensions        {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    int                         framesInFlight          {2};
 };
 
 struct VulkanQueueFamilyIndices {
@@ -140,7 +141,8 @@ public:
     VulkanWindow(const gu2::WindowSettings& windowSettings, const VulkanSettings& vulkanSettings) :
         Window<VulkanWindow>    (windowSettings),
         _vulkanSettings         (vulkanSettings),
-        _vulkanPhysicalDevice   (VK_NULL_HANDLE)
+        _vulkanPhysicalDevice   (VK_NULL_HANDLE),
+        _currentFrame           (0)
     {
         initVulkan();
     }
@@ -148,9 +150,11 @@ public:
     ~VulkanWindow()
     {
         vkDeviceWaitIdle(_vulkanDevice);
-        vkDestroySemaphore(_vulkanDevice, _vulkanImageAvailableSemaphore, nullptr);
-        vkDestroySemaphore(_vulkanDevice, _vulkanRenderFinishedSemaphore, nullptr);
-        vkDestroyFence(_vulkanDevice, _vulkanInFlightFence, nullptr);
+        for (int i=0; i<_vulkanSettings.framesInFlight; ++i) {
+            vkDestroySemaphore(_vulkanDevice, _vulkanImageAvailableSemaphores[i], nullptr);
+            vkDestroySemaphore(_vulkanDevice, _vulkanRenderFinishedSemaphores[i], nullptr);
+            vkDestroyFence(_vulkanDevice, _vulkanInFlightFences[i], nullptr);
+        }
         vkDestroyCommandPool(_vulkanDevice, _vulkanCommandPool, nullptr);
         for (auto& framebuffer : _vulkanSwapChainFramebuffers) {
             vkDestroyFramebuffer(_vulkanDevice, framebuffer, nullptr);
@@ -185,7 +189,7 @@ public:
         createGraphicsPipeline();
         createFramebuffers();
         createCommandPool();
-        createCommandBuffer();
+        createCommandBuffers();
         createSyncObjects();
     }
 
@@ -550,13 +554,16 @@ public:
         renderPassInfo.subpassCount = 1;
         renderPassInfo.pSubpasses = &subpass;
 
+        // Add dependency to prevent
         VkSubpassDependency dependency{};
-        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL; // previous render pass (present)
         dependency.dstSubpass = 0;
-        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; // wait for image copy to swapchain
+        // image to be ready
         dependency.srcAccessMask = 0;
         dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; // prevent any modifications to the color
+        // attachment: this prevents layout transitions from happening before color attachment output stage
         renderPassInfo.dependencyCount = 1;
         renderPassInfo.pDependencies = &dependency;
 
@@ -751,15 +758,16 @@ public:
 
     }
 
-    void createCommandBuffer()
+    void createCommandBuffers()
     {
+        _vulkanCommandBuffers.resize(_vulkanSettings.framesInFlight);
         VkCommandBufferAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         allocInfo.commandPool = _vulkanCommandPool;
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = 1;
+        allocInfo.commandBufferCount = _vulkanCommandBuffers.size();
 
-        if (vkAllocateCommandBuffers(_vulkanDevice, &allocInfo, &_vulkanCommandBuffer) != VK_SUCCESS) {
+        if (vkAllocateCommandBuffers(_vulkanDevice, &allocInfo, _vulkanCommandBuffers.data()) != VK_SUCCESS) {
             throw std::runtime_error("Failed to allocate command buffers!");
         }
     }
@@ -812,15 +820,23 @@ public:
 
     void createSyncObjects()
     {
+        _vulkanImageAvailableSemaphores.resize(_vulkanSettings.framesInFlight);
+        _vulkanRenderFinishedSemaphores.resize(_vulkanSettings.framesInFlight);
+        _vulkanInFlightFences.resize(_vulkanSettings.framesInFlight);
+
         VkSemaphoreCreateInfo semaphoreInfo{};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
         VkFenceCreateInfo fenceInfo{};
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-        if (vkCreateSemaphore(_vulkanDevice, &semaphoreInfo, nullptr, &_vulkanImageAvailableSemaphore) != VK_SUCCESS ||
-            vkCreateSemaphore(_vulkanDevice, &semaphoreInfo, nullptr, &_vulkanRenderFinishedSemaphore) != VK_SUCCESS ||
-            vkCreateFence(_vulkanDevice, &fenceInfo, nullptr, &_vulkanInFlightFence) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create synchronization structures!");
+
+        for (int i=0; i<_vulkanSettings.framesInFlight; ++i) {
+            if (vkCreateSemaphore(_vulkanDevice, &semaphoreInfo, nullptr, &_vulkanImageAvailableSemaphores[i]) != VK_SUCCESS ||
+                vkCreateSemaphore(_vulkanDevice, &semaphoreInfo, nullptr, &_vulkanRenderFinishedSemaphores[i]) != VK_SUCCESS ||
+                vkCreateFence(_vulkanDevice, &fenceInfo, nullptr, &_vulkanInFlightFences[i]) != VK_SUCCESS) {
+                throw std::runtime_error("Failed to create synchronization structures!");
+            }
         }
     }
 
@@ -828,8 +844,8 @@ public:
     {
         switch (event.type) {
             case gu2::Event::WINDOW:
-                switch (event.window.event) {
-                    case gu2::WindowEventID::CLOSE: close(); return;
+                switch (event.window.action) {
+                    case gu2::WindowEventAction::CLOSE: close(); return;
                     default: break;
                 }
                 break;
@@ -845,31 +861,31 @@ public:
 
     void render()
     {
-        vkWaitForFences(_vulkanDevice, 1, &_vulkanInFlightFence, VK_TRUE, UINT64_MAX);
-        vkResetFences(_vulkanDevice, 1, &_vulkanInFlightFence);
+        vkWaitForFences(_vulkanDevice, 1, &_vulkanInFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
+        vkResetFences(_vulkanDevice, 1, &_vulkanInFlightFences[_currentFrame]);
 
         uint32_t imageIndex;
-        vkAcquireNextImageKHR(_vulkanDevice, _vulkanSwapChain, UINT64_MAX, _vulkanImageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+        vkAcquireNextImageKHR(_vulkanDevice, _vulkanSwapChain, UINT64_MAX, _vulkanImageAvailableSemaphores[_currentFrame], VK_NULL_HANDLE, &imageIndex);
 
-        vkResetCommandBuffer(_vulkanCommandBuffer, 0);
-        recordCommandBuffer(_vulkanCommandBuffer, imageIndex);
+        vkResetCommandBuffer(_vulkanCommandBuffers[_currentFrame], 0);
+        recordCommandBuffer(_vulkanCommandBuffers[_currentFrame], imageIndex);
 
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-        VkSemaphore waitSemaphores[] = {_vulkanImageAvailableSemaphore}; // is this needed?
+        VkSemaphore waitSemaphores[] = {_vulkanImageAvailableSemaphores[_currentFrame]}; // is this needed?
         VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
         submitInfo.waitSemaphoreCount = 1;
         submitInfo.pWaitSemaphores = waitSemaphores;
         submitInfo.pWaitDstStageMask = waitStages;
         submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &_vulkanCommandBuffer;
-        VkSemaphore signalSemaphores[] = {_vulkanRenderFinishedSemaphore}; // is this needed?
+        submitInfo.pCommandBuffers = &_vulkanCommandBuffers[_currentFrame];
+        VkSemaphore signalSemaphores[] = {_vulkanRenderFinishedSemaphores[_currentFrame]}; // is this needed?
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = signalSemaphores;
 
-        if (vkQueueSubmit(_vulkanGraphicsQueue, 1, &submitInfo, _vulkanInFlightFence) != VK_SUCCESS) {
-            throw std::runtime_error("failed to submit draw command buffer!");
+        if (vkQueueSubmit(_vulkanGraphicsQueue, 1, &submitInfo, _vulkanInFlightFences[_currentFrame]) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to submit draw command buffer!");
         }
 
         VkPresentInfoKHR presentInfo{};
@@ -884,31 +900,36 @@ public:
         presentInfo.pResults = nullptr; // Optional
 
         vkQueuePresentKHR(_vulkanPresentQueue, &presentInfo);
+
+        _currentFrame = (_currentFrame+1) % _vulkanSettings.framesInFlight;
     }
 
 private:
-    VulkanSettings              _vulkanSettings;
-    VkInstance                  _vulkanInstance;
-    VkDebugUtilsMessengerEXT    _vulkanDebugMessenger;
-    VkSurfaceKHR                _vulkanSurface;
-    VkPhysicalDevice            _vulkanPhysicalDevice;
-    VkDevice                    _vulkanDevice;
-    VkQueue                     _vulkanGraphicsQueue;
-    VkQueue                     _vulkanPresentQueue;
-    VkSwapchainKHR              _vulkanSwapChain;
-    std::vector<VkImage>        _vulkanSwapChainImages;
-    std::vector<VkImageView>    _vulkanSwapChainImageViews;
-    VkFormat                    _vulkanSwapChainImageFormat;
-    VkExtent2D                  _vulkanSwapChainExtent;
-    VkRenderPass                _vulkanRenderPass;
-    VkPipelineLayout            _vulkanPipelineLayout;
-    VkPipeline                  _vulkanGraphicsPipeline;
-    std::vector<VkFramebuffer>  _vulkanSwapChainFramebuffers;
-    VkCommandPool               _vulkanCommandPool;
-    VkCommandBuffer             _vulkanCommandBuffer;
-    VkSemaphore                 _vulkanImageAvailableSemaphore;
-    VkSemaphore                 _vulkanRenderFinishedSemaphore;
-    VkFence                     _vulkanInFlightFence;
+    const VulkanSettings            _vulkanSettings;
+
+    VkInstance                      _vulkanInstance;
+    VkDebugUtilsMessengerEXT        _vulkanDebugMessenger;
+    VkSurfaceKHR                    _vulkanSurface;
+    VkPhysicalDevice                _vulkanPhysicalDevice;
+    VkDevice                        _vulkanDevice;
+    VkQueue                         _vulkanGraphicsQueue;
+    VkQueue                         _vulkanPresentQueue;
+    VkSwapchainKHR                  _vulkanSwapChain;
+    std::vector<VkImage>            _vulkanSwapChainImages;
+    std::vector<VkImageView>        _vulkanSwapChainImageViews;
+    VkFormat                        _vulkanSwapChainImageFormat;
+    VkExtent2D                      _vulkanSwapChainExtent;
+    VkRenderPass                    _vulkanRenderPass;
+    VkPipelineLayout                _vulkanPipelineLayout;
+    VkPipeline                      _vulkanGraphicsPipeline;
+    std::vector<VkFramebuffer>      _vulkanSwapChainFramebuffers;
+    VkCommandPool                   _vulkanCommandPool;
+    std::vector<VkCommandBuffer>    _vulkanCommandBuffers;
+    std::vector<VkSemaphore>        _vulkanImageAvailableSemaphores;
+    std::vector<VkSemaphore>        _vulkanRenderFinishedSemaphores;
+    std::vector<VkFence>            _vulkanInFlightFences;
+
+    uint64_t                        _currentFrame;
 };
 
 
