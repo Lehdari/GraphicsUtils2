@@ -38,12 +38,14 @@ public:
 
 private:
     using WindowHandleEventFunction = void(*)(void*, const Event& event);
+    using WindowRenderFunction = void(*)(void*);
     using WindowIsOpenFunction = bool(*)(void*);
 
     // Helper struct needed for type erasure
     struct WindowStorage {
         void*                       window;
         WindowHandleEventFunction   handleEvent;
+        WindowRenderFunction        render;
         WindowIsOpenFunction        isOpen;
     };
 
@@ -56,6 +58,9 @@ private:
 
     template <typename T_Window>
     static inline void windowHandleEvent(void* window, const Event& event);
+
+    template <typename T_Window>
+    static inline void windowRender(void* window);
 
     template <typename T_Window>
     static inline bool windowIsOpen(void* window);

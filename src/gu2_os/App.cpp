@@ -44,10 +44,13 @@ bool App::update()
 
     // TODO remove closed windows from _windows vector (and _windowMap)
 
+    bool foundOpenWindow = false;
     for (const auto& [windowId, windowStorage] : _windowMap) {
-        if (windowStorage.isOpen(windowStorage.window))
-            return true;
+        if (windowStorage.isOpen(windowStorage.window)) {
+            windowStorage.render(windowStorage.window);
+            foundOpenWindow = true;
+        }
     }
 
-    return false;
+    return foundOpenWindow;
 }

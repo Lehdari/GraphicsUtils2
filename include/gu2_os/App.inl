@@ -20,6 +20,7 @@ void App::addWindow(Window<T_Derived>* window)
         std::move(windowId), {
         window,
         &windowHandleEvent<T_Derived>,
+        &windowRender<T_Derived>,
         &windowIsOpen<Window<T_Derived>>
     }));
 
@@ -57,6 +58,12 @@ template<typename T_Window>
 void App::windowHandleEvent(void* window, const Event& event)
 {
     static_cast<T_Window*>(window)->handleEvent(event);
+}
+
+template<typename T_Window>
+void App::windowRender(void* window)
+{
+    static_cast<T_Window*>(window)->render();
 }
 
 template<typename T_Window>
