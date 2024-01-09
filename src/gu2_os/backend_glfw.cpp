@@ -22,7 +22,8 @@ uint64_t gu2::detail::nActiveWindows = 0;
 WindowObject detail::createWindowObject(const WindowSettings& settings)
 {
     glfwInit();
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // Don't initialize OpenGL
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE); // TODO make flags configurable via WindowSettings
     return {settings.w, settings.h, settings.name.c_str(), nullptr, nullptr};
 }
 

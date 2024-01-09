@@ -19,11 +19,14 @@ namespace gu2 {
 
 enum class WindowEventAction : uint8_t {
     UNKNOWN,
-    CLOSE
+    CLOSE,
+    RESIZE
 };
 
 struct WindowEvent {
     WindowEventAction   action;
+    int32_t             data1;
+    int32_t             data2;
 };
 
 enum class KeyEventAction : uint8_t {

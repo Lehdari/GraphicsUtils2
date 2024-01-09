@@ -23,7 +23,8 @@ uint64_t gu2::detail::nActiveWindows = 0;
 
 WindowObject detail::createWindowObject(const WindowSettings& settings)
 {
-    return {settings.name.c_str(), settings.x, settings.y, settings.w, settings.h, SDL_WINDOW_VULKAN};
+    return {settings.name.c_str(), settings.x, settings.y, settings.w, settings.h,
+        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE}; // TODO make flags configurable via WindowSettings
 }
 
 

@@ -33,6 +33,8 @@ public:
     template <typename T_Window>
     static inline void windowCloseCallback(GLFWwindow* window);
     template <typename T_Window>
+    static inline void windowSizeCallback(GLFWwindow* window, int width, int height);
+    template <typename T_Window>
     static inline void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
     #endif
 

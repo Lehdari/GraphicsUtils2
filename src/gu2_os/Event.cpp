@@ -40,6 +40,12 @@ Event::Event(const SDL_Event& sdlEvent)
             switch (sdlEvent.window.event) {
                 case SDL_WINDOWEVENT_CLOSE:
                     window.action = WindowEventAction::CLOSE; break;
+                //case SDL_WINDOWEVENT_RESIZED: // No need for tracking user resize explicitly for now, see https://wiki.libsdl.org/SDL2/SDL_WindowEventID
+                case SDL_WINDOWEVENT_SIZE_CHANGED:
+                    window.action = WindowEventAction::RESIZE;
+                    window.data1 = sdlEvent.window.data1;
+                    window.data2 = sdlEvent.window.data2;
+                    break;
                 default:
                     window.action = WindowEventAction::UNKNOWN;
             }

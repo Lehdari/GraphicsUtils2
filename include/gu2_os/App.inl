@@ -26,6 +26,7 @@ void App::addWindow(Window<T_Derived>* window)
 
     #if GU2_BACKEND == GU2_BACKEND_GLFW
     glfwSetWindowCloseCallback(window->_window.get(), &windowCloseCallback<T_Derived>);
+    glfwSetWindowSizeCallback(window->_window.get(), &windowSizeCallback<T_Derived>);
     glfwSetKeyCallback(window->_window.get(), &keyCallback<T_Derived>);
     #endif
 }
@@ -38,6 +39,18 @@ void App::windowCloseCallback(GLFWwindow* window)
     Event event;
     event.type = gu2::Event::WINDOW;
     event.window.action = gu2::WindowEventAction::CLOSE;
+
+    static_cast<T_Window*>(_windowMap.at(window).window)->handleEvent(event);
+}
+
+template <typename T_Window>
+void App::windowSizeCallback(GLFWwindow* window, int width, int height)
+{
+    Event event;
+    event.type = gu2::Event::WINDOW;
+    event.window.action = gu2::WindowEventAction::RESIZE;
+    event.window.data1 = width;
+    event.window.data2 = height;
 
     static_cast<T_Window*>(_windowMap.at(window).window)->handleEvent(event);
 }
