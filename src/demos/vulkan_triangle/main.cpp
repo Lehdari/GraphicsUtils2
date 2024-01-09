@@ -147,6 +147,11 @@ public:
 
     ~VulkanWindow()
     {
+        vkDeviceWaitIdle(_vulkanDevice);
+        vkDestroySemaphore(_vulkanDevice, _vulkanImageAvailableSemaphore, nullptr);
+        vkDestroySemaphore(_vulkanDevice, _vulkanRenderFinishedSemaphore, nullptr);
+        vkDestroyFence(_vulkanDevice, _vulkanInFlightFence, nullptr);
+        vkDestroyCommandPool(_vulkanDevice, _vulkanCommandPool, nullptr);
         for (auto& framebuffer : _vulkanSwapChainFramebuffers) {
             vkDestroyFramebuffer(_vulkanDevice, framebuffer, nullptr);
         }
@@ -179,6 +184,9 @@ public:
         createRenderPass();
         createGraphicsPipeline();
         createFramebuffers();
+        createCommandPool();
+        createCommandBuffer();
+        createSyncObjects();
     }
 
     void createInstance()
@@ -542,6 +550,16 @@ public:
         renderPassInfo.subpassCount = 1;
         renderPassInfo.pSubpasses = &subpass;
 
+        VkSubpassDependency dependency{};
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependency.dstSubpass = 0;
+        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcAccessMask = 0;
+        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        renderPassInfo.dependencyCount = 1;
+        renderPassInfo.pDependencies = &dependency;
+
         if (vkCreateRenderPass(_vulkanDevice, &renderPassInfo, nullptr, &_vulkanRenderPass) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create render pass!");
         }
@@ -712,8 +730,97 @@ public:
             framebufferInfo.layers = 1;
 
             if (vkCreateFramebuffer(_vulkanDevice, &framebufferInfo, nullptr, &_vulkanSwapChainFramebuffers[i]) != VK_SUCCESS) {
-                throw std::runtime_error("failed to create framebuffer!");
+                throw std::runtime_error("Failed to create framebuffer!");
             }
+        }
+    }
+
+    void createCommandPool()
+    {
+        auto queueFamilyIndices = findQueueFamilies(_vulkanPhysicalDevice);
+
+        VkCommandPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+
+        if (vkCreateCommandPool(_vulkanDevice, &poolInfo, nullptr, &_vulkanCommandPool) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create command pool!");
+        }
+
+
+    }
+
+    void createCommandBuffer()
+    {
+        VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.commandPool = _vulkanCommandPool;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandBufferCount = 1;
+
+        if (vkAllocateCommandBuffers(_vulkanDevice, &allocInfo, &_vulkanCommandBuffer) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to allocate command buffers!");
+        }
+    }
+
+    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    {
+        VkCommandBufferBeginInfo beginInfo{};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = 0; // Optional
+        beginInfo.pInheritanceInfo = nullptr; // Optional
+
+        if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to begin recording command buffer!");
+        }
+
+        VkRenderPassBeginInfo renderPassInfo{};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = _vulkanRenderPass;
+        renderPassInfo.framebuffer = _vulkanSwapChainFramebuffers[imageIndex];
+        renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.extent = _vulkanSwapChainExtent;
+        VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+        renderPassInfo.clearValueCount = 1;
+        renderPassInfo.pClearValues = &clearColor;
+
+        vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _vulkanGraphicsPipeline);
+
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(_vulkanSwapChainExtent.width);
+        viewport.height = static_cast<float>(_vulkanSwapChainExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+        VkRect2D scissor{};
+        scissor.offset = {0, 0};
+        scissor.extent = _vulkanSwapChainExtent;
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+        vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        vkCmdEndRenderPass(commandBuffer);
+
+        if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to record command buffer!");
+        }
+    }
+
+    void createSyncObjects()
+    {
+        VkSemaphoreCreateInfo semaphoreInfo{};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        VkFenceCreateInfo fenceInfo{};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        if (vkCreateSemaphore(_vulkanDevice, &semaphoreInfo, nullptr, &_vulkanImageAvailableSemaphore) != VK_SUCCESS ||
+            vkCreateSemaphore(_vulkanDevice, &semaphoreInfo, nullptr, &_vulkanRenderFinishedSemaphore) != VK_SUCCESS ||
+            vkCreateFence(_vulkanDevice, &fenceInfo, nullptr, &_vulkanInFlightFence) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create synchronization structures!");
         }
     }
 
@@ -738,7 +845,45 @@ public:
 
     void render()
     {
-        // TODO
+        vkWaitForFences(_vulkanDevice, 1, &_vulkanInFlightFence, VK_TRUE, UINT64_MAX);
+        vkResetFences(_vulkanDevice, 1, &_vulkanInFlightFence);
+
+        uint32_t imageIndex;
+        vkAcquireNextImageKHR(_vulkanDevice, _vulkanSwapChain, UINT64_MAX, _vulkanImageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+
+        vkResetCommandBuffer(_vulkanCommandBuffer, 0);
+        recordCommandBuffer(_vulkanCommandBuffer, imageIndex);
+
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+        VkSemaphore waitSemaphores[] = {_vulkanImageAvailableSemaphore}; // is this needed?
+        VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        submitInfo.waitSemaphoreCount = 1;
+        submitInfo.pWaitSemaphores = waitSemaphores;
+        submitInfo.pWaitDstStageMask = waitStages;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &_vulkanCommandBuffer;
+        VkSemaphore signalSemaphores[] = {_vulkanRenderFinishedSemaphore}; // is this needed?
+        submitInfo.signalSemaphoreCount = 1;
+        submitInfo.pSignalSemaphores = signalSemaphores;
+
+        if (vkQueueSubmit(_vulkanGraphicsQueue, 1, &submitInfo, _vulkanInFlightFence) != VK_SUCCESS) {
+            throw std::runtime_error("failed to submit draw command buffer!");
+        }
+
+        VkPresentInfoKHR presentInfo{};
+        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.waitSemaphoreCount = 1;
+        presentInfo.pWaitSemaphores = signalSemaphores;
+
+        VkSwapchainKHR swapChains[] = {_vulkanSwapChain};
+        presentInfo.swapchainCount = 1;
+        presentInfo.pSwapchains = swapChains;
+        presentInfo.pImageIndices = &imageIndex;
+        presentInfo.pResults = nullptr; // Optional
+
+        vkQueuePresentKHR(_vulkanPresentQueue, &presentInfo);
     }
 
 private:
@@ -759,6 +904,11 @@ private:
     VkPipelineLayout            _vulkanPipelineLayout;
     VkPipeline                  _vulkanGraphicsPipeline;
     std::vector<VkFramebuffer>  _vulkanSwapChainFramebuffers;
+    VkCommandPool               _vulkanCommandPool;
+    VkCommandBuffer             _vulkanCommandBuffer;
+    VkSemaphore                 _vulkanImageAvailableSemaphore;
+    VkSemaphore                 _vulkanRenderFinishedSemaphore;
+    VkFence                     _vulkanInFlightFence;
 };
 
 
