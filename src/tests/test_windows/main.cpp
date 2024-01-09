@@ -22,7 +22,7 @@ public:
     void handleEvent(const gu2::Event& event)
     {
         if (event.type == gu2::Event::WINDOW &&
-            event.window.event == gu2::WindowEventID::CLOSE) {
+            event.window.action == gu2::WindowEventAction::CLOSE) {
             close();
         }
     }
@@ -40,7 +40,7 @@ public:
     void handleEvent(const gu2::Event& event)
     {
         if (event.type == gu2::Event::KEY &&
-            event.key.state == gu2::KeyEventState::PRESSED &&
+            event.key.state == gu2::KeyEventAction::PRESSED &&
             event.key.sym.scancode == gu2::ScanCode::ESCAPE) {
             close();
         }

@@ -26,8 +26,8 @@ KeySym::KeySym(const SDL_Keysym& sym) :
 }
 
 KeyEvent::KeyEvent(const SDL_KeyboardEvent& sdlKeyboardEvent, uint32_t sdlEventType) :
-    state   (sdlEventType == SDL_KEYDOWN ? (sdlKeyboardEvent.repeat ? KeyEventState::REPEATED : KeyEventState::PRESSED)
-             : KeyEventState::RELEASED),
+    state   (sdlEventType == SDL_KEYDOWN ? (sdlKeyboardEvent.repeat ? KeyEventAction::REPEATED : KeyEventAction::PRESSED)
+             : KeyEventAction::RELEASED),
     sym     (sdlKeyboardEvent.keysym)
 {
 }
@@ -39,9 +39,9 @@ Event::Event(const SDL_Event& sdlEvent)
             type = Event::WINDOW;
             switch (sdlEvent.window.event) {
                 case SDL_WINDOWEVENT_CLOSE:
-                    window.event = WindowEventID::CLOSE; break;
+                    window.action = WindowEventAction::CLOSE; break;
                 default:
-                    window.event = WindowEventID::NONE;
+                    window.action = WindowEventAction::UNKNOWN;
             }
         }   break;
         case SDL_KEYDOWN:
@@ -79,16 +79,16 @@ namespace {
         return static_cast<KeyMod>(mod);
     }
 
-    inline KeyEventState convertGLFWKeyState(int glfwKeyAction)
+    inline KeyEventAction convertGLFWKeyState(int glfwKeyAction)
     {
         switch (glfwKeyAction) {
-            case GLFW_PRESS: return KeyEventState::PRESSED;
-            case GLFW_RELEASE: return KeyEventState::RELEASED;
-            case GLFW_REPEAT: return KeyEventState::REPEATED;
+            case GLFW_PRESS: return KeyEventAction::PRESSED;
+            case GLFW_RELEASE: return KeyEventAction::RELEASED;
+            case GLFW_REPEAT: return KeyEventAction::REPEATED;
             default:
-                return KeyEventState::UNKNOWN;
+                return KeyEventAction::UNKNOWN;
         }
-        return KeyEventState::UNKNOWN;
+        return KeyEventAction::UNKNOWN;
     }
 
     inline void storeGLFWKeyMapValues(int key, KeyCode* keyCodeMapIndex, ScanCode* scanCodeMapIndex)

@@ -17,16 +17,16 @@
 
 namespace gu2 {
 
-enum class WindowEventID : uint8_t {
-    NONE,
+enum class WindowEventAction : uint8_t {
+    UNKNOWN,
     CLOSE
 };
 
 struct WindowEvent {
-    WindowEventID   event;
+    WindowEventAction   action;
 };
 
-enum class KeyEventState : uint8_t {
+enum class KeyEventAction : uint8_t {
     UNKNOWN,
     PRESSED,
     RELEASED,
@@ -47,7 +47,7 @@ struct KeySym {
 };
 
 struct KeyEvent {
-    KeyEventState   state;
+    KeyEventAction   state;
     KeySym          sym;
 
     KeyEvent() = default;

@@ -37,7 +37,7 @@ void App::windowCloseCallback(GLFWwindow* window)
 {
     Event event;
     event.type = gu2::Event::WINDOW;
-    event.window.event = gu2::WindowEventID::CLOSE;
+    event.window.action = gu2::WindowEventAction::CLOSE;
 
     static_cast<T_Window*>(_windowMap.at(window).window)->handleEvent(event);
 }
