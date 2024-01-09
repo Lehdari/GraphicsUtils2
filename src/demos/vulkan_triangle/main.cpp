@@ -149,23 +149,19 @@ public:
 
     ~VulkanWindow()
     {
+        // Wait for the Vulkan device to finish its tasks
         vkDeviceWaitIdle(_vulkanDevice);
+
+        cleanupSwapChain();
         for (int i=0; i<_vulkanSettings.framesInFlight; ++i) {
             vkDestroySemaphore(_vulkanDevice, _vulkanImageAvailableSemaphores[i], nullptr);
             vkDestroySemaphore(_vulkanDevice, _vulkanRenderFinishedSemaphores[i], nullptr);
             vkDestroyFence(_vulkanDevice, _vulkanInFlightFences[i], nullptr);
         }
         vkDestroyCommandPool(_vulkanDevice, _vulkanCommandPool, nullptr);
-        for (auto& framebuffer : _vulkanSwapChainFramebuffers) {
-            vkDestroyFramebuffer(_vulkanDevice, framebuffer, nullptr);
-        }
         vkDestroyPipeline(_vulkanDevice, _vulkanGraphicsPipeline, nullptr);
         vkDestroyPipelineLayout(_vulkanDevice, _vulkanPipelineLayout, nullptr);
         vkDestroyRenderPass(_vulkanDevice, _vulkanRenderPass, nullptr);
-        for (auto& imageView : _vulkanSwapChainImageViews) {
-            vkDestroyImageView(_vulkanDevice, imageView, nullptr);
-        }
-        vkDestroySwapchainKHR(_vulkanDevice, _vulkanSwapChain, nullptr);
         vkDestroyDevice(_vulkanDevice, nullptr);
         if (_vulkanSettings.enableValidationLayers)
             DestroyDebugUtilsMessengerEXT(_vulkanInstance, _vulkanDebugMessenger, nullptr);
@@ -486,6 +482,30 @@ public:
         _vulkanSwapChainImages = gu2::vkGetSwapchainImagesKHR(_vulkanDevice, _vulkanSwapChain);
         _vulkanSwapChainImageFormat = surfaceFormat.format;
         _vulkanSwapChainExtent = extent;
+    }
+
+    void cleanupSwapChain()
+    {
+        for (auto& framebuffer : _vulkanSwapChainFramebuffers) {
+            vkDestroyFramebuffer(_vulkanDevice, framebuffer, nullptr);
+        }
+
+        for (auto& imageView : _vulkanSwapChainImageViews) {
+            vkDestroyImageView(_vulkanDevice, imageView, nullptr);
+        }
+
+        vkDestroySwapchainKHR(_vulkanDevice, _vulkanSwapChain, nullptr);
+    }
+
+    void recreateSwapChain()
+    {
+        vkDeviceWaitIdle(_vulkanDevice);
+
+        cleanupSwapChain();
+
+        createSwapChain();
+        createImageViews();
+        createFramebuffers();
     }
 
     void createImageViews() {
@@ -846,6 +866,10 @@ public:
             case gu2::Event::WINDOW:
                 switch (event.window.action) {
                     case gu2::WindowEventAction::CLOSE: close(); return;
+                    case gu2::WindowEventAction::RESIZE:
+                        _framebufferResized = true;
+                        printf("Resize to %d x %d\n", event.window.data1, event.window.data2); fflush(stdout);
+                        return;
                     default: break;
                 }
                 break;
@@ -862,10 +886,19 @@ public:
     void render()
     {
         vkWaitForFences(_vulkanDevice, 1, &_vulkanInFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
-        vkResetFences(_vulkanDevice, 1, &_vulkanInFlightFences[_currentFrame]);
 
+        // Check for swap chain obsolescence
         uint32_t imageIndex;
-        vkAcquireNextImageKHR(_vulkanDevice, _vulkanSwapChain, UINT64_MAX, _vulkanImageAvailableSemaphores[_currentFrame], VK_NULL_HANDLE, &imageIndex);
+        auto nextImageStatus = vkAcquireNextImageKHR(_vulkanDevice, _vulkanSwapChain, UINT64_MAX,
+            _vulkanImageAvailableSemaphores[_currentFrame], VK_NULL_HANDLE, &imageIndex);
+        if (nextImageStatus == VK_ERROR_OUT_OF_DATE_KHR || nextImageStatus == VK_SUBOPTIMAL_KHR) {
+            recreateSwapChain();
+            return;
+        }
+        else if (nextImageStatus != VK_SUCCESS)
+            throw std::runtime_error("Failed to acquire swap chain image!");
+
+        vkResetFences(_vulkanDevice, 1, &_vulkanInFlightFences[_currentFrame]);
 
         vkResetCommandBuffer(_vulkanCommandBuffers[_currentFrame], 0);
         recordCommandBuffer(_vulkanCommandBuffers[_currentFrame], imageIndex);
@@ -899,7 +932,13 @@ public:
         presentInfo.pImageIndices = &imageIndex;
         presentInfo.pResults = nullptr; // Optional
 
-        vkQueuePresentKHR(_vulkanPresentQueue, &presentInfo);
+        auto queuePresentStatus = vkQueuePresentKHR(_vulkanPresentQueue, &presentInfo);
+        if (queuePresentStatus == VK_ERROR_OUT_OF_DATE_KHR || queuePresentStatus == VK_SUBOPTIMAL_KHR ||
+            _framebufferResized) {
+            recreateSwapChain();
+        }
+        else if (queuePresentStatus != VK_SUCCESS)
+            throw std::runtime_error("Failed to present swap chain image!");
 
         _currentFrame = (_currentFrame+1) % _vulkanSettings.framesInFlight;
     }
@@ -930,6 +969,7 @@ private:
     std::vector<VkFence>            _vulkanInFlightFences;
 
     uint64_t                        _currentFrame;
+    bool                            _framebufferResized;
 };
 
 
