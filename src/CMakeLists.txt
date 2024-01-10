@@ -47,7 +47,7 @@ add_library(gu2::os ALIAS gu2_os)
 
 
 # gu2::vulkan
-macro(gu2_add_vulkan_lib libname) # macro for generating versions for different backends
+macro(gu2_add_vulkan_lib libname os_lib) # macro for generating versions for different backends
     # Library sources
     set(GU2_VULKAN_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/gu2_vulkan/${GU2_BACKEND_SOURCE_FILE}
@@ -62,16 +62,12 @@ macro(gu2_add_vulkan_lib libname) # macro for generating versions for different 
 
     # Library properties
     target_link_libraries(${libname}
-        PUBLIC  gu2::os
+        PUBLIC  ${os_lib} # pick the correct OS backend
         PUBLIC  vulkan
     )
     target_include_directories(${libname}
         PUBLIC  $<BUILD_INTERFACE:${GU2_INCLUDE_DIR}> $<INSTALL_INTERFACE:include>
         PRIVATE ${GU2_INCLUDE_DIR}/gu2_vulkan
-    )
-    target_compile_definitions(${libname}
-        PUBLIC  -DGU2_BACKEND=${GU2_BACKEND_ENUM}
-        PUBLIC  -DGU2_BACKEND_NAME=\"${GU2_BACKEND}\"
     )
     set_property(TARGET ${libname} PROPERTY CXX_STANDARD 20)
     add_custom_command(
@@ -82,7 +78,7 @@ macro(gu2_add_vulkan_lib libname) # macro for generating versions for different 
     )
 endmacro()
 
-gu2_add_vulkan_lib(gu2_vulkan)
+gu2_add_vulkan_lib(gu2_vulkan gu2::os)
 add_library(gu2::vulkan ALIAS gu2_vulkan)
 
 
@@ -92,7 +88,7 @@ if(${GU2_ENABLE_TESTS})
     foreach(backend ${GU2_BACKEND_OPTIONS})
         gu2_select_backend(${backend} OFF)
         gu2_add_os_lib(gu2_os_${backend})
-        gu2_add_vulkan_lib(gu2_vulkan_${backend})
+        gu2_add_vulkan_lib(gu2_vulkan_${backend} gu2_os_${backend})
     endforeach()
     add_subdirectory(tests)
 endif()
