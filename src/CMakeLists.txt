@@ -1,3 +1,16 @@
+# gu2::util
+add_library(gu2_util INTERFACE)
+target_link_libraries(gu2_util
+    INTERFACE   Eigen3::Eigen
+)
+target_include_directories(gu2_util
+    INTERFACE   $<BUILD_INTERFACE:${GU2_INCLUDE_DIR}> $<INSTALL_INTERFACE:include>
+    #PRIVATE     ${GU2_INCLUDE_DIR}/gu2_util
+)
+set_property(TARGET ${libname} PROPERTY CXX_STANDARD 20)
+add_library(gu2::util ALIAS gu2_util)
+
+
 # gu2::os
 macro(gu2_add_os_lib libname) # macro for generating versions for different backends
     # Library sources

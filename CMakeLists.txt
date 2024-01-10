@@ -14,6 +14,7 @@ gu2_select_backend(${GU2_BACKEND})
 
 # Fetch 3rd party dependencies
 add_subdirectory(ext)
+find_package(Eigen3 3.4 REQUIRED)
 
 # Required for shader installation
 set(GU2_SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shader)

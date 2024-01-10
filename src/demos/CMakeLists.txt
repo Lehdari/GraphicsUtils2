@@ -19,5 +19,6 @@ add_executable(demo_vulkan_box ${VULKAN_BOX_SOURCES})
 target_link_libraries(demo_vulkan_box
     PUBLIC  gu2::os
     PUBLIC  gu2::vulkan
+    PUBLIC  gu2::util
 )
 set_property(TARGET demo_vulkan_box PROPERTY CXX_STANDARD 20)
