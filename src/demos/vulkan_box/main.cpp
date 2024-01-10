@@ -10,6 +10,7 @@
 
 #include <gu2_os/App.hpp>
 #include <gu2_os/Window.hpp>
+#include <gu2_util/MathTypes.hpp>
 #include <gu2_vulkan/backend.hpp>
 #include <gu2_vulkan/QueryWrapper.hpp>
 
@@ -135,6 +136,37 @@ struct VulkanSwapChainSupportDetails {
     std::vector<VkPresentModeKHR>   presentModes;
 };
 
+struct Vertex {
+    gu2::Vec2f  p;
+    gu2::Vec3f  c;
+
+    static VkVertexInputBindingDescription getBindingDescription()
+    {
+        VkVertexInputBindingDescription bindingDescription{};
+
+        bindingDescription.binding = 0;
+        bindingDescription.stride = sizeof(Vertex);
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        return bindingDescription;
+    }
+
+    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions()
+    {
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+
+        attributeDescriptions[0].binding = 0;
+        attributeDescriptions[0].location = 0;
+        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+        attributeDescriptions[0].offset = offsetof(Vertex, p);
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[1].offset = offsetof(Vertex, c);
+
+        return attributeDescriptions;
+    }
+};
 
 class VulkanWindow : public gu2::Window<VulkanWindow> {
 public:
@@ -142,7 +174,10 @@ public:
         Window<VulkanWindow>    (windowSettings),
         _vulkanSettings         (vulkanSettings),
         _vulkanPhysicalDevice   (VK_NULL_HANDLE),
-        _currentFrame           (0)
+        _currentFrame           (0),
+        _vertexData             {{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+                                 {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+                                 {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}}
     {
         initVulkan();
     }
@@ -153,6 +188,8 @@ public:
         vkDeviceWaitIdle(_vulkanDevice);
 
         cleanupSwapChain();
+        vkDestroyBuffer(_vulkanDevice, _vulkanVertexBuffer, nullptr);
+        vkFreeMemory(_vulkanDevice, _vulkanVertexBufferMemory, nullptr);
         for (int i=0; i<_vulkanSettings.framesInFlight; ++i) {
             vkDestroySemaphore(_vulkanDevice, _vulkanImageAvailableSemaphores[i], nullptr);
             vkDestroySemaphore(_vulkanDevice, _vulkanRenderFinishedSemaphores[i], nullptr);
@@ -185,6 +222,7 @@ public:
         createGraphicsPipeline();
         createFramebuffers();
         createCommandPool();
+        createVertexBuffer();
         createCommandBuffers();
         createSyncObjects();
     }
@@ -541,7 +579,7 @@ public:
 
         VkShaderModule shaderModule;
         if (vkCreateShaderModule(_vulkanDevice, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create shader module!");
+            throw std::runtime_error("Failed to create shader module!");
         }
 
         return shaderModule;
@@ -595,8 +633,8 @@ public:
     void createGraphicsPipeline()
     {
         // Shaders
-        auto vertShaderCode = readFile("../shader/spir-v/vertex_triangle.spv");
-        auto fragShaderCode = readFile("../shader/spir-v/fragment_triangle.spv");
+        auto vertShaderCode = readFile("../shader/spir-v/vertex_simple.spv");
+        auto fragShaderCode = readFile("../shader/spir-v/fragment_simple.spv");
 
         VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
         VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
@@ -616,12 +654,15 @@ public:
         VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
         // Vertex input info
+        auto bindingDescription = Vertex::getBindingDescription();
+        auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
         VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputInfo.vertexBindingDescriptionCount = 0;
-        vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
-        vertexInputInfo.vertexAttributeDescriptionCount = 0;
-        vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
+        vertexInputInfo.vertexBindingDescriptionCount = 1;
+        vertexInputInfo.pVertexBindingDescriptions = &bindingDescription; // Optional
+        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+        vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data(); // Optional
 
         // Input assembly
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -778,6 +819,54 @@ public:
 
     }
 
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+    {
+        VkPhysicalDeviceMemoryProperties memProperties;
+        vkGetPhysicalDeviceMemoryProperties(_vulkanPhysicalDevice, &memProperties);
+
+        for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+            if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+                return i;
+            }
+        }
+
+        throw std::runtime_error("Failed to find suitable memory type!");
+    }
+
+    void createVertexBuffer()
+    {
+        VkBufferCreateInfo bufferInfo{};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = sizeof(Vertex) * _vertexData.size();
+        bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        if (vkCreateBuffer(_vulkanDevice, &bufferInfo, nullptr, &_vulkanVertexBuffer) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create vertex buffer!");
+        }
+
+        VkMemoryRequirements memRequirements;
+        vkGetBufferMemoryRequirements(_vulkanDevice, _vulkanVertexBuffer, &memRequirements);
+
+        VkMemoryAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = memRequirements.size;
+        allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        if (vkAllocateMemory(_vulkanDevice, &allocInfo, nullptr, &_vulkanVertexBufferMemory) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to allocate vertex buffer memory!");
+        }
+
+        vkBindBufferMemory(_vulkanDevice, _vulkanVertexBuffer, _vulkanVertexBufferMemory, 0);
+
+        void* data;
+        vkMapMemory(_vulkanDevice, _vulkanVertexBufferMemory, 0, bufferInfo.size, 0, &data);
+        memcpy(data, _vertexData.data(), (size_t) bufferInfo.size);
+        vkUnmapMemory(_vulkanDevice, _vulkanVertexBufferMemory);
+
+    }
+
     void createCommandBuffers()
     {
         _vulkanCommandBuffers.resize(_vulkanSettings.framesInFlight);
@@ -830,7 +919,11 @@ public:
         scissor.extent = _vulkanSwapChainExtent;
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-        vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        VkBuffer vertexBuffers[] = {_vulkanVertexBuffer};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
+        vkCmdDraw(commandBuffer, static_cast<uint32_t>(_vertexData.size()), 1, 0, 0);
         vkCmdEndRenderPass(commandBuffer);
 
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -967,7 +1060,10 @@ private:
     std::vector<VkSemaphore>        _vulkanImageAvailableSemaphores;
     std::vector<VkSemaphore>        _vulkanRenderFinishedSemaphores;
     std::vector<VkFence>            _vulkanInFlightFences;
+    VkBuffer                        _vulkanVertexBuffer;
+    VkDeviceMemory                  _vulkanVertexBufferMemory;
 
+    std::vector<Vertex>             _vertexData;
     uint64_t                        _currentFrame;
     bool                            _framebufferResized;
 };
