@@ -1,7 +1,8 @@
 GraphicsUtils2
 ==============
 
-Let's try this Vulkan thing out
+This toolkit is intended to eventually serve as the successor for https://github.com/Lehdari/GraphicsUtils.
+Long way to go still, Vulkan is not learnt overnight.
 
 Setup
 -----
@@ -22,3 +23,30 @@ Setup
     ```
     sudo apt install libeigen3-dev
     ```
+5) Install CMake >=3.27
+
+Build
+-----
+
+```
+mkdir build
+cd build/
+cmake .. -GNinja
+ninja -j0
+```
+
+Run Demos
+---------
+
+In `build/` directory:
+```
+src/demos/demo_vulkan_triangle
+```
+
+Run Tests
+---------
+
+In `build/` directory:
+```
+ninja test
+```
