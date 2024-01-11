@@ -175,9 +175,11 @@ public:
         _vulkanSettings         (vulkanSettings),
         _vulkanPhysicalDevice   (VK_NULL_HANDLE),
         _currentFrame           (0),
-        _vertexData             {{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-                                 {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-                                 {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}}
+        _vertexData             {{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+                                 {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+                                 {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+                                 {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}},
+        _indexData              {0, 1, 2, 2, 3, 0}
     {
         initVulkan();
     }
@@ -190,6 +192,8 @@ public:
         cleanupSwapChain();
         vkDestroyBuffer(_vulkanDevice, _vulkanVertexBuffer, nullptr);
         vkFreeMemory(_vulkanDevice, _vulkanVertexBufferMemory, nullptr);
+        vkDestroyBuffer(_vulkanDevice, _vulkanIndexBuffer, nullptr);
+        vkFreeMemory(_vulkanDevice, _vulkanIndexBufferMemory, nullptr);
         for (int i=0; i<_vulkanSettings.framesInFlight; ++i) {
             vkDestroySemaphore(_vulkanDevice, _vulkanImageAvailableSemaphores[i], nullptr);
             vkDestroySemaphore(_vulkanDevice, _vulkanRenderFinishedSemaphores[i], nullptr);
@@ -223,6 +227,7 @@ public:
         createFramebuffers();
         createCommandPool();
         createVertexBuffer();
+        createIndexBuffer();
         createCommandBuffers();
         createSyncObjects();
     }
@@ -888,6 +893,29 @@ public:
         vkFreeMemory(_vulkanDevice, stagingBufferMemory, nullptr);
     }
 
+    void createIndexBuffer()
+    {
+        VkDeviceSize bufferSize = sizeof(_indexData[0]) * _indexData.size();
+
+        VkBuffer stagingBuffer;
+        VkDeviceMemory stagingBufferMemory;
+        createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+        void* data;
+        vkMapMemory(_vulkanDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
+        memcpy(data, _indexData.data(), (size_t) bufferSize);
+        vkUnmapMemory(_vulkanDevice, stagingBufferMemory);
+
+        createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _vulkanIndexBuffer, _vulkanIndexBufferMemory);
+
+        copyBuffer(stagingBuffer, _vulkanIndexBuffer, bufferSize);
+
+        vkDestroyBuffer(_vulkanDevice, stagingBuffer, nullptr);
+        vkFreeMemory(_vulkanDevice, stagingBufferMemory, nullptr);
+    }
+
     void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
     {
         VkCommandBufferAllocateInfo allocInfo{};
@@ -977,8 +1005,9 @@ public:
         VkBuffer vertexBuffers[] = {_vulkanVertexBuffer};
         VkDeviceSize offsets[] = {0};
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+        vkCmdBindIndexBuffer(commandBuffer, _vulkanIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
-        vkCmdDraw(commandBuffer, static_cast<uint32_t>(_vertexData.size()), 1, 0, 0);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_indexData.size()), 1, 0, 0, 0);
         vkCmdEndRenderPass(commandBuffer);
 
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -1117,8 +1146,11 @@ private:
     std::vector<VkFence>            _vulkanInFlightFences;
     VkBuffer                        _vulkanVertexBuffer;
     VkDeviceMemory                  _vulkanVertexBufferMemory;
+    VkBuffer                        _vulkanIndexBuffer;
+    VkDeviceMemory                  _vulkanIndexBufferMemory;
 
     std::vector<Vertex>             _vertexData;
+    std::vector<uint16_t>           _indexData;
     uint64_t                        _currentFrame;
     bool                            _framebufferResized;
 };
