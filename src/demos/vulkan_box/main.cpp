@@ -25,6 +25,7 @@
 #include <limits>
 #include <optional>
 #include <set>
+#include <iostream>
 
 
 bool checkValidationLayerSupport(const std::vector<const char*>& validationLayers)
@@ -137,7 +138,7 @@ struct VulkanSwapChainSupportDetails {
 };
 
 struct Vertex {
-    gu2::Vec2f  p;
+    gu2::Vec3f  p;
     gu2::Vec3f  c;
 
     static VkVertexInputBindingDescription getBindingDescription()
@@ -157,7 +158,7 @@ struct Vertex {
 
         attributeDescriptions[0].binding = 0;
         attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
         attributeDescriptions[0].offset = offsetof(Vertex, p);
         attributeDescriptions[1].binding = 0;
         attributeDescriptions[1].location = 1;
@@ -168,18 +169,33 @@ struct Vertex {
     }
 };
 
+struct UniformBufferObject {
+    alignas(16) gu2::Mat4f  model;
+    alignas(16) gu2::Mat4f  view;
+    alignas(16) gu2::Mat4f  projection;
+};
+
 class VulkanWindow : public gu2::Window<VulkanWindow> {
 public:
     VulkanWindow(const gu2::WindowSettings& windowSettings, const VulkanSettings& vulkanSettings) :
         Window<VulkanWindow>    (windowSettings),
         _vulkanSettings         (vulkanSettings),
         _vulkanPhysicalDevice   (VK_NULL_HANDLE),
-        _currentFrame           (0),
-        _vertexData             {{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-                                 {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-                                 {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-                                 {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}},
-        _indexData              {0, 1, 2, 2, 3, 0}
+        _vertexData             {{{-1.0f, -1.0f, -1.0f}, {0.0f, 0.0f, 0.0f}},
+                                 {{1.0f, -1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}},
+                                 {{-1.0f, 1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}},
+                                 {{1.0f, 1.0f, -1.0f}, {1.0f, 1.0f, 0.0f}},
+                                 {{-1.0f, -1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
+                                 {{1.0f, -1.0f, 1.0f}, {1.0f, 0.0f, 1.0f}},
+                                 {{-1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 1.0f}},
+                                 {{1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}}},
+        _indexData              {0, 1, 3, 0, 3, 2,
+                                 1, 5, 7, 1, 7, 3,
+                                 4, 0, 2, 4, 2, 6,
+                                 5, 4, 6, 5, 6, 7,
+                                 4, 1, 0, 4, 5, 1,
+                                 2, 3, 7, 2, 7, 6},
+        _currentFrame           (0)
     {
         initVulkan();
     }
@@ -190,6 +206,12 @@ public:
         vkDeviceWaitIdle(_vulkanDevice);
 
         cleanupSwapChain();
+        for (int i=0; i<_vulkanSettings.framesInFlight; ++i) {
+            vkDestroyBuffer(_vulkanDevice, _vulkanUniformBuffers[i], nullptr);
+            vkFreeMemory(_vulkanDevice, _vulkanUniformBuffersMemory[i], nullptr);
+        }
+        vkDestroyDescriptorPool(_vulkanDevice, _vulkanDescriptorPool, nullptr);
+        vkDestroyDescriptorSetLayout(_vulkanDevice, _vulkanDescriptorSetLayout, nullptr);
         vkDestroyBuffer(_vulkanDevice, _vulkanVertexBuffer, nullptr);
         vkFreeMemory(_vulkanDevice, _vulkanVertexBufferMemory, nullptr);
         vkDestroyBuffer(_vulkanDevice, _vulkanIndexBuffer, nullptr);
@@ -223,11 +245,15 @@ public:
         createSwapChain();
         createImageViews();
         createRenderPass();
+        createDescriptorSetLayout();
         createGraphicsPipeline();
         createFramebuffers();
         createCommandPool();
         createVertexBuffer();
         createIndexBuffer();
+        createUniformBuffers();
+        createDescriptorPool();
+        createDescriptorSets();
         createCommandBuffers();
         createSyncObjects();
     }
@@ -635,6 +661,30 @@ public:
         }
     }
 
+    void createDescriptorSetLayout()
+    {
+        VkDescriptorSetLayoutBinding uboLayoutBinding{};
+        uboLayoutBinding.binding = 0;
+        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        uboLayoutBinding.descriptorCount = 1;
+        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
+
+        VkDescriptorSetLayoutCreateInfo layoutInfo{};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.bindingCount = 1;
+        layoutInfo.pBindings = &uboLayoutBinding;
+
+        if (vkCreateDescriptorSetLayout(_vulkanDevice, &layoutInfo, nullptr, &_vulkanDescriptorSetLayout) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create descriptor set layout!");
+        }
+
+        VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &_vulkanDescriptorSetLayout;
+    }
+
     void createGraphicsPipeline()
     {
         // Shaders
@@ -753,8 +803,8 @@ public:
 
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 0; // Optional
-        pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &_vulkanDescriptorSetLayout;
         pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
         pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
@@ -916,6 +966,74 @@ public:
         vkFreeMemory(_vulkanDevice, stagingBufferMemory, nullptr);
     }
 
+    void createUniformBuffers()
+    {
+        VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+
+        _vulkanUniformBuffers.resize(_vulkanSettings.framesInFlight);
+        _vulkanUniformBuffersMemory.resize(_vulkanSettings.framesInFlight);
+        _vulkanUniformBuffersMapped.resize(_vulkanSettings.framesInFlight);
+
+        for (size_t i = 0; i < _vulkanSettings.framesInFlight; i++) {
+            createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, _vulkanUniformBuffers[i], _vulkanUniformBuffersMemory[i]);
+
+            vkMapMemory(_vulkanDevice, _vulkanUniformBuffersMemory[i], 0, bufferSize, 0, &_vulkanUniformBuffersMapped[i]);
+        }
+    }
+
+    void createDescriptorPool()
+    {
+        VkDescriptorPoolSize poolSize{};
+        poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSize.descriptorCount = static_cast<uint32_t>(_vulkanSettings.framesInFlight);
+
+        VkDescriptorPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.poolSizeCount = 1;
+        poolInfo.pPoolSizes = &poolSize;
+        poolInfo.maxSets = static_cast<uint32_t>(_vulkanSettings.framesInFlight);
+
+        if (vkCreateDescriptorPool(_vulkanDevice, &poolInfo, nullptr, &_vulkanDescriptorPool) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create descriptor pool!");
+        }
+    }
+
+    void createDescriptorSets()
+    {
+        std::vector<VkDescriptorSetLayout> layouts(_vulkanSettings.framesInFlight, _vulkanDescriptorSetLayout);
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = _vulkanDescriptorPool;
+        allocInfo.descriptorSetCount = static_cast<uint32_t>(_vulkanSettings.framesInFlight);
+        allocInfo.pSetLayouts = layouts.data();
+
+        _vulkanDescriptorSets.resize(_vulkanSettings.framesInFlight);
+        if (vkAllocateDescriptorSets(_vulkanDevice, &allocInfo, _vulkanDescriptorSets.data()) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to allocate descriptor sets!");
+        }
+
+        for (size_t i = 0; i < _vulkanSettings.framesInFlight; i++) {
+            VkDescriptorBufferInfo bufferInfo{};
+            bufferInfo.buffer = _vulkanUniformBuffers[i];
+            bufferInfo.offset = 0;
+            bufferInfo.range = sizeof(UniformBufferObject);
+
+            VkWriteDescriptorSet descriptorWrite{};
+            descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrite.dstSet = _vulkanDescriptorSets[i];
+            descriptorWrite.dstBinding = 0;
+            descriptorWrite.dstArrayElement = 0;
+            descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            descriptorWrite.descriptorCount = 1;
+            descriptorWrite.pBufferInfo = &bufferInfo;
+            descriptorWrite.pImageInfo = nullptr; // Optional
+            descriptorWrite.pTexelBufferView = nullptr; // Optional
+
+            vkUpdateDescriptorSets(_vulkanDevice, 1, &descriptorWrite, 0, nullptr);
+        }
+    }
+
     void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
     {
         VkCommandBufferAllocateInfo allocInfo{};
@@ -1007,6 +1125,8 @@ public:
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
         vkCmdBindIndexBuffer(commandBuffer, _vulkanIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _vulkanPipelineLayout, 0, 1,
+            &_vulkanDescriptorSets[_currentFrame], 0, nullptr);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_indexData.size()), 1, 0, 0, 0);
         vkCmdEndRenderPass(commandBuffer);
 
@@ -1035,6 +1155,50 @@ public:
                 throw std::runtime_error("Failed to create synchronization structures!");
             }
         }
+    }
+
+    void updateUniformBuffer(uint32_t currentImage)
+    {
+        static auto startTime = std::chrono::high_resolution_clock::now();
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        double time = std::chrono::duration<double, std::chrono::seconds::period>(currentTime - startTime).count();
+
+        UniformBufferObject ubo;
+        // Model matrix
+        ubo.model <<
+            (Eigen::AngleAxisf(0.25*M_PI*time, gu2::Vec3f::UnitX())
+            * Eigen::AngleAxisf(0.5*M_PI*time, gu2::Vec3f::UnitY())
+            * Eigen::AngleAxisf(0.33*M_PI*time, gu2::Vec3f::UnitZ())).toRotationMatrix(),
+            gu2::Vec3f::Zero(), gu2::Vec3f::Zero().transpose(), 1.0f;
+
+        // View matrix
+        gu2::Vec3f target(0.0f, 0.0f, 0.0f);
+        gu2::Vec3f source(0.0f, 0.0f, 3.0f);
+        gu2::Vec3f up(0.0f, 1.0f, 0.0f);
+
+        gu2::Vec3f forward = (target-source).normalized();
+        gu2::Vec3f right = forward.cross(up).normalized();
+        gu2::Vec3f up2 = right.cross(forward).normalized();
+
+        gu2::Mat3f viewRotation;
+        viewRotation << right.transpose(), up2.transpose(), forward.transpose();
+        ubo.view << viewRotation, -viewRotation*source,
+                    0.0f, 0.0f, 0.0f, 1.0f;
+
+        // Perspective matrix
+        float near = 0.1f;
+        float far = 10.0f;
+        float fov = M_PI/3.0; // 60 degrees
+        float aspectRatio = _vulkanSwapChainExtent.width / (float) _vulkanSwapChainExtent.height;
+        float r = tanf(fov / 2.0f);
+
+        ubo.projection <<
+            1.0f/(aspectRatio * r), 0.0f,       0.0f,           0.0f,
+            0.0f,                   -1.0f/r,    0.0f,           0.0f,
+            0.0f,                   0.0f,       far/(far-near), -(far*near)/(far-near),
+            0.0f,                   0.0f,       1.0f,           0.0f;
+
+        memcpy(_vulkanUniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
     }
 
     void handleEvent(const gu2::Event& event)
@@ -1079,6 +1243,8 @@ public:
 
         vkResetCommandBuffer(_vulkanCommandBuffers[_currentFrame], 0);
         recordCommandBuffer(_vulkanCommandBuffers[_currentFrame], imageIndex);
+
+        updateUniformBuffer(_currentFrame);
 
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1136,6 +1302,7 @@ private:
     VkFormat                        _vulkanSwapChainImageFormat;
     VkExtent2D                      _vulkanSwapChainExtent;
     VkRenderPass                    _vulkanRenderPass;
+    VkDescriptorSetLayout           _vulkanDescriptorSetLayout;
     VkPipelineLayout                _vulkanPipelineLayout;
     VkPipeline                      _vulkanGraphicsPipeline;
     std::vector<VkFramebuffer>      _vulkanSwapChainFramebuffers;
@@ -1148,6 +1315,11 @@ private:
     VkDeviceMemory                  _vulkanVertexBufferMemory;
     VkBuffer                        _vulkanIndexBuffer;
     VkDeviceMemory                  _vulkanIndexBufferMemory;
+    std::vector<VkBuffer>           _vulkanUniformBuffers;
+    std::vector<VkDeviceMemory>     _vulkanUniformBuffersMemory;
+    std::vector<void*>              _vulkanUniformBuffersMapped;
+    VkDescriptorPool                _vulkanDescriptorPool;
+    std::vector<VkDescriptorSet>    _vulkanDescriptorSets;
 
     std::vector<Vertex>             _vertexData;
     std::vector<uint16_t>           _indexData;
