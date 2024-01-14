@@ -15,6 +15,11 @@ gu2_select_backend(${GU2_BACKEND})
 # Fetch 3rd party dependencies
 add_subdirectory(ext)
 
+find_package(Vulkan REQUIRED)
+add_library(vulkan INTERFACE)
+target_include_directories(vulkan SYSTEM INTERFACE ${Vulkan_INCLUDE_DIR})
+target_link_libraries(vulkan INTERFACE ${Vulkan_LIBRARY})
+
 # Required for shader installation
 set(GU2_SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shader)
 
