@@ -1,7 +1,9 @@
 #!/bin/bash
 
+SCRIPT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source $SCRIPT_DIR/package_installed_dpkg.sh
+
 # Install the Vulkan SDK
-source package_installed_dpkg.sh
 if ! package_installed "vulkan-sdk"; then
   echo "No Vulkan SDK installed, installing..."
 
@@ -10,3 +12,10 @@ if ! package_installed "vulkan-sdk"; then
   sudo apt update
   sudo apt install vulkan-sdk
 fi
+
+# Install Eigen 3
+if ! package_installed "libeigen3-dev"; then
+  echo "Eigen 3 not installed, installing..."
+  sudo apt install libeigen3-dev
+fi
+
