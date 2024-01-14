@@ -1,13 +1,22 @@
 # gu2::util
-add_library(gu2_util INTERFACE)
+set(GU2_UTIL_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/gu2_util/Image.cpp
+)
+
+if (GU2_SHARED_LIBS)
+    add_library(gu2_util SHARED ${GU2_UTIL_SOURCES})
+else()
+    add_library(gu2_util STATIC ${GU2_UTIL_SOURCES})
+endif()
 target_link_libraries(gu2_util
-    INTERFACE   Eigen3::Eigen
+    PUBLIC  Eigen3::Eigen
+    PUBLIC  stb
 )
 target_include_directories(gu2_util
-    INTERFACE   $<BUILD_INTERFACE:${GU2_INCLUDE_DIR}> $<INSTALL_INTERFACE:include>
-    #PRIVATE     ${GU2_INCLUDE_DIR}/gu2_util
+    PUBLIC  $<BUILD_INTERFACE:${GU2_INCLUDE_DIR}> $<INSTALL_INTERFACE:include>
+    PRIVATE ${GU2_INCLUDE_DIR}/gu2_util
 )
-set_property(TARGET ${libname} PROPERTY CXX_STANDARD 20)
+set_property(TARGET gu2_util PROPERTY CXX_STANDARD 20)
 add_library(gu2::util ALIAS gu2_util)
 
 
