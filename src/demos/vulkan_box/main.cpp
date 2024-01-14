@@ -102,7 +102,7 @@ std::vector<char> readFile(const std::filesystem::path& filename)
     if (!std::filesystem::is_regular_file(filename))
         throw std::runtime_error(filename.string() + " is not a file");
 
-    FILE *f = fopen(filename.c_str(), "rb");
+    FILE *f = fopen(filename.string().c_str(), "rb");
     fseek(f, 0, SEEK_END);
     long fsize = ftell(f);
     fseek(f, 0, SEEK_SET);  /* same as rewind(f); */
