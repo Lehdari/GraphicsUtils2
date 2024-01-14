@@ -101,6 +101,7 @@ namespace gu2 {
 enum class ImageFormat : uint32_t {
     UNCHANGED   = 0, // only allowed as an argument to convertImage
     GU2_IMAGE_FORMATS(GU2_IMAGE_FORMAT)
+    UNKNOWN     = 256
 };
 #undef GU2_IMAGE_FORMAT
 

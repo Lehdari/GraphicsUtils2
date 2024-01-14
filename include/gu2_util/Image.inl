@@ -363,10 +363,22 @@ Image<T_Data> readImageFromFile(const std::filesystem::path& filename)
     // TODO extend, only 8/8/8 RGB PNG supported for now
 
     int w, h, c;
-    unsigned char* data = stbi_load(filename.string().c_str(), &w, &h, &c, 3);
+    c = 0;
+    unsigned char* data = stbi_load(filename.string().c_str(), &w, &h, &c, 0);
     if (data == nullptr)
         throw std::runtime_error("Unable to load image from " + filename.string() + ": " + stbi_failure_reason());
-    Image<T_Data> img(w, h, ImageFormat::RGB);
+
+    ImageFormat imageFormat = ImageFormat::UNKNOWN;
+    switch (c) {
+        case 1: imageFormat = ImageFormat::GRAY; break;
+        case 3: imageFormat = ImageFormat::RGB; break;
+        case 4: imageFormat = ImageFormat::RGBA; break;
+        default: {
+            throw std::runtime_error("Unable to deduce format from number of channels\n");
+            stbi_image_free(data);
+        }
+    }
+    Image<T_Data> img(w, h, imageFormat);
     img.copyFrom(data);
     stbi_image_free(data);
 
