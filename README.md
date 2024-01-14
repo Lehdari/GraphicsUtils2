@@ -34,6 +34,12 @@ ninja -j0
 ```
 Building demos and tests are disabled by default.
 
+### Selecting the Windowing backend
+
+GraphicsUtils2 supports [SDL2](https://www.libsdl.org/) and [GLFW](https://www.glfw.org/)
+libraries for providing the Vulkan-enabled window and user input functions. The backend
+can be selected with `GU2_BACKEND` CMake setting.
+
 ## Run Demos
 
 Passing `GU2_BUILD_DEMOS=ON` to cmake required.
