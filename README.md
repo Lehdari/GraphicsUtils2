@@ -7,7 +7,7 @@ Long way to go still, Vulkan is not learnt overnight.
 
 1) Clone the repository
 
-2) Clone submodules:
+2) Clone submodules (most of the dependencies are imported via them):
     ```
     cd GraphicsUtils2/
     git submodule update --init --recursive
@@ -22,14 +22,7 @@ For Ubuntu 22.04 an installation script is provided:
 
 Manual installation:
 
-1) Install LunarG Vulkan SDK: https://vulkan.lunarg.com/sdk/home
-
-2) Install Eigen: https://eigen.tuxfamily.org/index.php?title=Main_Page
-
-   On debian-based Linux distros (such as Ubuntu):
-    ```
-    sudo apt install libeigen3-dev
-    ```
+- Install LunarG Vulkan SDK: https://vulkan.lunarg.com/sdk/home
 
 ## Build
 

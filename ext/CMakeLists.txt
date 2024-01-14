@@ -1,5 +1,6 @@
-add_subdirectory(SDL)
+add_subdirectory(eigen)
 add_subdirectory(glfw)
+add_subdirectory(SDL)
 
 # stb added as an interface library
 add_library(stb INTERFACE)
