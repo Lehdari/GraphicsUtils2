@@ -179,13 +179,6 @@ inline void convertImage(
     Image<T_DataDest>& destImage,
     ImageFormat destFormat = ImageFormat::UNCHANGED);
 
-// Helper function for getting a matrix for image format conversion
-#if 0
-template <typename T_Data, ImageFormat T_SrcFormat, ImageFormat T_DestFormat>
-inline Eigen::Matrix<T_Data, getImageFormatNChannels(T_DestFormat), getImageFormatNChannels(T_SrcFormat)>
-    getImageFormatConversionMatrix();
-#endif
-
 template <typename T_Data>
 inline void writeImageToFile(const Image<T_Data>& image, const std::filesystem::path& filename);
 
