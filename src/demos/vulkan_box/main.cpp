@@ -18,6 +18,7 @@
 #include <vulkan/vulkan.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <cstdint>
 #include <cstdio>
