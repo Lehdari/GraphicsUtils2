@@ -161,7 +161,7 @@ void Image<T_Data>::copyFrom(const T_Data* data)
 template <typename T_Data>
 void Image<T_Data>::convertImageFormat(ImageFormat destFormat)
 {
-    if (destFormat == ImageFormat::UNCHANGED)
+    if (destFormat == _format || destFormat == ImageFormat::UNCHANGED)
         return;
 
     if (usingExternalBuffer() && getImageFormatNChannels(destFormat) != getImageFormatNChannels(_format)) {
@@ -316,7 +316,8 @@ inline void convertImage(
 
     if constexpr (std::is_same_v<T_DataSrc, T_DataDest>) {
         // No conversion required, only copy
-        memcpy(data, srcImage._data, srcImage._nElements * sizeof(T_DataSrc));
+        if (data != srcImage._data)
+            memcpy(data, srcImage._data, srcImage._nElements * sizeof(T_DataSrc));
     }
     else {
         // Perform type conversion if the types differ
