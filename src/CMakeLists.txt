@@ -92,7 +92,7 @@ add_library(gu2::vulkan ALIAS gu2_vulkan)
 
 
 # Tests
-if(${GU2_ENABLE_TESTS})
+if(${GU2_BUILD_TESTS})
     # build versions of gu2_os with every backend for tests
     foreach(backend ${GU2_BACKEND_OPTIONS})
         gu2_select_backend(${backend} OFF)
@@ -104,4 +104,6 @@ endif()
 
 
 # Demos (TODO: add option for disabling these)
-add_subdirectory(demos)
+if (${GU2_BUILD_DEMOS})
+    add_subdirectory(demos)
+endif()

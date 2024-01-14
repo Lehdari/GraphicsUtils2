@@ -29,11 +29,14 @@ Manual installation:
 ```
 mkdir build
 cd build/
-cmake .. -GNinja
+cmake .. -GNinja [-DGU2_BUILD_DEMOS=ON] [-DGU2_BUILD_TESTS=ON]
 ninja -j0
 ```
+Building demos and tests are disabled by default.
 
 ## Run Demos
+
+Passing `GU2_BUILD_DEMOS=ON` to cmake required.
 
 In `build/` directory:
 ```
@@ -42,6 +45,8 @@ src/demos/demo_vulkan_box
 ```
 
 ## Run Tests
+
+Passing `GU2_BUILD_TESTS=ON` to cmake required.
 
 In `build/` directory:
 ```

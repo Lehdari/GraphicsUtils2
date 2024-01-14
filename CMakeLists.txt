@@ -7,7 +7,7 @@ include(cmake/select_backend.cmake)
 set(GU2_BACKEND_OPTIONS sdl2 glfw)
 set(GU2_BACKEND "SDL2" CACHE STRING "OS interfacing backend")
 option(GU2_SHARED_LIBS "Build shared libraries instead of static ones" ON)
-option(GU2_ENABLE_TESTS "Build tests" ON)
+option(GU2_BUILD_TESTS "Build tests" OFF)
 option(GU2_BUILD_DEMOS "Build demo applications" OFF)
 
 gu2_select_backend(${GU2_BACKEND})
