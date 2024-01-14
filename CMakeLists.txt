@@ -11,6 +11,9 @@ option(GU2_BUILD_TESTS "Build tests" OFF)
 option(GU2_BUILD_DEMOS "Build demo applications" OFF)
 
 gu2_select_backend(${GU2_BACKEND})
+if (GU2_SHARED_LIBS)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
 
 # Fetch 3rd party dependencies
 add_subdirectory(ext)
