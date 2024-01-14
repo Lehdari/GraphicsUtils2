@@ -610,6 +610,8 @@ public:
         createSwapChain();
         createImageViews();
         createFramebuffers();
+
+        _framebufferResized = false;
     }
 
     VkImageView createImageView(VkImage image, VkFormat format) {

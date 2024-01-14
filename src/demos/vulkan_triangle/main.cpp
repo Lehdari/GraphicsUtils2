@@ -506,6 +506,8 @@ public:
         createSwapChain();
         createImageViews();
         createFramebuffers();
+
+        _framebufferResized = false;
     }
 
     void createImageViews() {
