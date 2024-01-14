@@ -21,4 +21,7 @@ target_link_libraries(demo_vulkan_box
     PUBLIC  gu2::vulkan
     PUBLIC  gu2::util
 )
+target_compile_definitions(demo_vulkan_box
+    PUBLIC  -DASSETS_DIR=\"${GU2_ASSETS_DIR}\"
+)
 set_property(TARGET demo_vulkan_box PROPERTY CXX_STANDARD 20)

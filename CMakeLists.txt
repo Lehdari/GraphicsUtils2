@@ -22,5 +22,7 @@ set(GU2_SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shader)
 # Include directory to use for build tree
 set(GU2_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+set(GU2_ASSETS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/assets)
+
 # Define installation targets
 add_subdirectory(src)
