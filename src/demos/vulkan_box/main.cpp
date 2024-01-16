@@ -121,6 +121,7 @@ struct VulkanSettings {
     std::vector<const char*>    validationLayers        {"VK_LAYER_KHRONOS_validation"};
     std::vector<const char*>    deviceExtensions        {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
     int                         framesInFlight          {2};
+    int                         nBoxes                  {3};
 };
 
 struct VulkanQueueFamilyIndices {
@@ -371,6 +372,9 @@ public:
         if (_vulkanPhysicalDevice == VK_NULL_HANDLE) {
             throw std::runtime_error("Failed to find a suitable GPU!");
         }
+
+        // Store the device properties in local struct
+        vkGetPhysicalDeviceProperties(_vulkanPhysicalDevice, &_vulkanPhysicalDeviceProperties);
     }
 
     uint32_t deviceSuitability(VkPhysicalDevice device)
@@ -706,7 +710,7 @@ public:
     {
         VkDescriptorSetLayoutBinding uboLayoutBinding{};
         uboLayoutBinding.binding = 0;
-        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
         uboLayoutBinding.descriptorCount = 1;
         uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
         uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
@@ -1008,8 +1012,7 @@ public:
 
         samplerInfo.anisotropyEnable = VK_TRUE;
         VkPhysicalDeviceProperties properties{};
-        vkGetPhysicalDeviceProperties(_vulkanPhysicalDevice, &properties);
-        samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+        samplerInfo.maxAnisotropy = _vulkanPhysicalDeviceProperties.limits.maxSamplerAnisotropy;
         samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
         samplerInfo.unnormalizedCoordinates = VK_FALSE;
         samplerInfo.compareEnable = VK_FALSE;
@@ -1124,9 +1127,20 @@ public:
         vkFreeMemory(_vulkanDevice, stagingBufferMemory, nullptr);
     }
 
+    size_t padUniformBufferSize(size_t originalSize)
+    {
+        // Calculate required alignment based on minimum device offset alignment
+        size_t minUboAlignment = _vulkanPhysicalDeviceProperties.limits.minUniformBufferOffsetAlignment;
+        size_t alignedSize = originalSize;
+        if (minUboAlignment > 0) {
+            alignedSize = (alignedSize + minUboAlignment - 1) & ~(minUboAlignment - 1);
+        }
+        return alignedSize;
+    }
+
     void createUniformBuffers()
     {
-        VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+        VkDeviceSize bufferSize = padUniformBufferSize(sizeof(UniformBufferObject)) * _vulkanSettings.nBoxes;
 
         _vulkanUniformBuffers.resize(_vulkanSettings.framesInFlight);
         _vulkanUniformBuffersMemory.resize(_vulkanSettings.framesInFlight);
@@ -1143,8 +1157,8 @@ public:
     void createDescriptorPool()
     {
         std::array<VkDescriptorPoolSize, 2> poolSizes{};
-        poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        poolSizes[0].descriptorCount = static_cast<uint32_t>(_vulkanSettings.framesInFlight);
+        poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        poolSizes[0].descriptorCount = static_cast<uint32_t>(_vulkanSettings.framesInFlight * _vulkanSettings.nBoxes);
         poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         poolSizes[1].descriptorCount = static_cast<uint32_t>(_vulkanSettings.framesInFlight);
 
@@ -1190,7 +1204,7 @@ public:
             descriptorWrites[0].dstSet = _vulkanDescriptorSets[i];
             descriptorWrites[0].dstBinding = 0;
             descriptorWrites[0].dstArrayElement = 0;
-            descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
             descriptorWrites[0].descriptorCount = 1;
             descriptorWrites[0].pBufferInfo = &bufferInfo;
 
@@ -1395,9 +1409,13 @@ public:
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
         vkCmdBindIndexBuffer(commandBuffer, _vulkanIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _vulkanPipelineLayout, 0, 1,
-            &_vulkanDescriptorSets[_currentFrame], 0, nullptr);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_indexData.size()), 1, 0, 0, 0);
+        for (int boxId=0; boxId<_vulkanSettings.nBoxes; ++boxId) {
+            uint32_t offset = boxId * padUniformBufferSize(sizeof(UniformBufferObject));
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _vulkanPipelineLayout, 0, 1,
+                &_vulkanDescriptorSets[_currentFrame], 1, &offset);
+            vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_indexData.size()), 1, 0, 0, 0);
+        }
+
         vkCmdEndRenderPass(commandBuffer);
 
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -1433,42 +1451,56 @@ public:
         auto currentTime = std::chrono::high_resolution_clock::now();
         double time = std::chrono::duration<double, std::chrono::seconds::period>(currentTime - startTime).count();
 
-        UniformBufferObject ubo;
-        // Model matrix
-        ubo.model <<
-            (Eigen::AngleAxisf(0.25*M_PI*time, gu2::Vec3f::UnitX())
-            * Eigen::AngleAxisf(0.5*M_PI*time, gu2::Vec3f::UnitY())
-            * Eigen::AngleAxisf(0.33*M_PI*time, gu2::Vec3f::UnitZ())).toRotationMatrix(),
-            gu2::Vec3f::Zero(), gu2::Vec3f::Zero().transpose(), 1.0f;
+        for (int boxId=0; boxId<_vulkanSettings.nBoxes; ++boxId) {
+            UniformBufferObject ubo;
+            // Model matrix
+            double boxPosAngle = boxId / (double)_vulkanSettings.nBoxes;
+            gu2::Vec3f modelPos(std::cos(boxPosAngle*2.0*M_PI + 0.25*time), 0.0f, std::sin(boxPosAngle*2.0*M_PI + 0.25*time));
+            modelPos *= 2.0f;
+            ubo.model <<
+                (Eigen::AngleAxisf(0.25*M_PI*time, gu2::Vec3f::UnitX())
+                * Eigen::AngleAxisf(0.5*M_PI*time, gu2::Vec3f::UnitY())
+                * Eigen::AngleAxisf(0.33*M_PI*time, gu2::Vec3f::UnitZ())).toRotationMatrix(),
+                modelPos, gu2::Vec3f::Zero().transpose(), 1.0f;
 
-        // View matrix
-        gu2::Vec3f target(0.0f, 0.0f, 0.0f);
-        gu2::Vec3f source(0.0f, 0.0f, 3.0f);
-        gu2::Vec3f up(0.0f, 1.0f, 0.0f);
+            // View matrix
+            gu2::Vec3f target(0.0f, 0.0f, 0.0f);
+            gu2::Vec3f source(1.0f, 3.0f, 5.0f);
+            gu2::Vec3f up(0.0f, 1.0f, 0.0f);
 
-        gu2::Vec3f forward = (target-source).normalized();
-        gu2::Vec3f right = forward.cross(up).normalized();
-        gu2::Vec3f up2 = right.cross(forward).normalized();
+            gu2::Vec3f forward = (target-source).normalized();
+            gu2::Vec3f right = forward.cross(up).normalized();
+            gu2::Vec3f up2 = right.cross(forward).normalized();
 
-        gu2::Mat3f viewRotation;
-        viewRotation << right.transpose(), up2.transpose(), forward.transpose();
-        ubo.view << viewRotation, -viewRotation*source,
-                    0.0f, 0.0f, 0.0f, 1.0f;
+            gu2::Mat3f viewRotation;
+            viewRotation << right.transpose(), up2.transpose(), forward.transpose();
+            ubo.view << viewRotation, -viewRotation*source,
+                        0.0f, 0.0f, 0.0f, 1.0f;
 
-        // Perspective matrix
-        float near = 0.1f;
-        float far = 10.0f;
-        float fov = M_PI/3.0; // 60 degrees
-        float aspectRatio = _vulkanSwapChainExtent.width / (float) _vulkanSwapChainExtent.height;
-        float r = tanf(fov / 2.0f);
+            // Perspective matrix
+            float near = 0.1f;
+            float far = 10.0f;
+            float fov = M_PI/3.0; // 60 degrees
+            float aspectRatio = _vulkanSwapChainExtent.width / (float) _vulkanSwapChainExtent.height;
+            float r = tanf(fov / 2.0f);
 
-        ubo.projection <<
-            1.0f/(aspectRatio * r), 0.0f,       0.0f,           0.0f,
-            0.0f,                   -1.0f/r,    0.0f,           0.0f,
-            0.0f,                   0.0f,       far/(far-near), -(far*near)/(far-near),
-            0.0f,                   0.0f,       1.0f,           0.0f;
+            // Traditional projection matrix
+//            ubo.projection <<
+//                1.0f/(aspectRatio * r), 0.0f,       0.0f,           0.0f,
+//                0.0f,                   -1.0f/r,    0.0f,           0.0f,
+//                0.0f,                   0.0f,       far/(far-near), -(far*near)/(far-near),
+//                0.0f,                   0.0f,       1.0f,           0.0f;
 
-        memcpy(_vulkanUniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+            // Infinite far-plane, inverted depth projection matrix
+            ubo.projection <<
+                1.0f/(aspectRatio * r), 0.0f,       0.0f,   0.0f,
+                0.0f,                   -1.0f/r,    0.0f,   0.0f,
+                0.0f,                   0.0f,       0.0f,   near,
+                0.0f,                   0.0f,       1.0f,   0.0f;
+
+            memcpy(reinterpret_cast<uint8_t*>(_vulkanUniformBuffersMapped[currentImage]) +
+                padUniformBufferSize(sizeof(ubo))*boxId, &ubo, sizeof(ubo));
+        }
     }
 
     void handleEvent(const gu2::Event& event)
@@ -1563,6 +1595,7 @@ private:
     VkDebugUtilsMessengerEXT        _vulkanDebugMessenger;
     VkSurfaceKHR                    _vulkanSurface;
     VkPhysicalDevice                _vulkanPhysicalDevice;
+    VkPhysicalDeviceProperties      _vulkanPhysicalDeviceProperties;
     VkDevice                        _vulkanDevice;
     VkQueue                         _vulkanGraphicsQueue;
     VkQueue                         _vulkanPresentQueue;
