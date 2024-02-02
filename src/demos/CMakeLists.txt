@@ -26,3 +26,19 @@ target_compile_definitions(demo_vulkan_box
     PUBLIC  -DASSETS_DIR=\"${GU2_ASSETS_DIR}\"
 )
 set_property(TARGET demo_vulkan_box PROPERTY CXX_STANDARD 20)
+
+# vulkan_sponza demo
+set(VULKAN_SPONZA_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/vulkan_sponza/main.cpp
+)
+
+add_executable(demo_vulkan_sponza ${VULKAN_SPONZA_SOURCES})
+target_link_libraries(demo_vulkan_sponza
+    PUBLIC  gu2::os
+    PUBLIC  gu2::vulkan
+    PUBLIC  gu2::util
+)
+target_compile_definitions(demo_vulkan_sponza
+    PUBLIC  -DASSETS_DIR=\"${GU2_ASSETS_DIR}\"
+)
+set_property(TARGET demo_vulkan_sponza PROPERTY CXX_STANDARD 20)
