@@ -11,6 +11,7 @@ endif()
 target_link_libraries(gu2_util
     PUBLIC  Eigen3::Eigen
     PUBLIC  stb
+    PUBLIC  nlohmann_json::nlohmann_json
 )
 target_include_directories(gu2_util
     PUBLIC  $<BUILD_INTERFACE:${GU2_INCLUDE_DIR}> $<INSTALL_INTERFACE:include>
