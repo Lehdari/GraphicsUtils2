@@ -1,5 +1,6 @@
 # gu2::util
 set(GU2_UTIL_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/gu2_util/GLTFLoader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/gu2_util/Image.cpp
 )
 
