@@ -348,24 +348,24 @@ inline void convertImage(
 }
 
 template<typename T_Data>
-void writeImageToFile(const Image<T_Data>& image, const std::filesystem::path& filename)
+void writeImageToFile(const Image<T_Data>& image, const Path& filename)
 {
     // TODO extend, only 8/8/8 RGB PNG supported for now
 
     Image<T_Data> img;
     convertImage(image, img, ImageFormat::RGB);
     auto nChannels = getImageFormatNChannels(img.format());
-    stbi_write_png(filename.string().c_str(), img.width(), img.height(), nChannels, img.data(), img.width()*nChannels);
+    stbi_write_png(GU2_PATH_TO_STRING(filename), img.width(), img.height(), nChannels, img.data(), img.width()*nChannels);
 }
 
 template<typename T_Data>
-Image<T_Data> readImageFromFile(const std::filesystem::path& filename)
+Image<T_Data> readImageFromFile(const Path& filename)
 {
     // TODO extend, only 8/8/8 RGB PNG supported for now
 
     int w, h, c;
     c = 0;
-    unsigned char* data = stbi_load(filename.string().c_str(), &w, &h, &c, 0);
+    unsigned char* data = stbi_load(GU2_PATH_TO_STRING(filename), &w, &h, &c, 0);
     if (data == nullptr)
         throw std::runtime_error("Unable to load image from " + filename.string() + ": " + stbi_failure_reason());
 

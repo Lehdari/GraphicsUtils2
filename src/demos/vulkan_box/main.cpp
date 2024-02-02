@@ -12,6 +12,7 @@
 #include <gu2_os/Window.hpp>
 #include <gu2_util/MathTypes.hpp>
 #include <gu2_util/Image.hpp>
+#include <gu2_util/Typedef.hpp>
 #include <gu2_vulkan/backend.hpp>
 #include <gu2_vulkan/QueryWrapper.hpp>
 
@@ -96,14 +97,14 @@ void DestroyDebugUtilsMessengerEXT(
     }
 }
 
-std::vector<char> readFile(const std::filesystem::path& filename)
+std::vector<char> readFile(const gu2::Path& filename)
 {
     if (!std::filesystem::exists(filename))
         throw std::runtime_error("File " + filename.string() + " does not exist");
     if (!std::filesystem::is_regular_file(filename))
         throw std::runtime_error(filename.string() + " is not a file");
 
-    FILE *f = fopen(filename.string().c_str(), "rb");
+    FILE *f = fopen(GU2_PATH_TO_STRING(filename), "rb");
     fseek(f, 0, SEEK_END);
     long fsize = ftell(f);
     fseek(f, 0, SEEK_SET);  /* same as rewind(f); */
@@ -1142,7 +1143,7 @@ public:
 
     void createTextureImage()
     {
-        auto image = gu2::readImageFromFile<uint8_t>(std::filesystem::path(ASSETS_DIR) / "textures/box.png");
+        auto image = gu2::readImageFromFile<uint8_t>(gu2::Path(ASSETS_DIR) / "textures/box.png");
         gu2::convertImage(image, image, gu2::ImageFormat::RGBA);
         _vulkanTextureImageMipLevels = std::floor(std::log2(std::max(image.width(), image.height()))) + 1;
         VkDeviceSize imageSize = image.nElements() * sizeof(uint8_t);

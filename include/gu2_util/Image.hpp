@@ -16,6 +16,7 @@
 
 #include "Macros.hpp"
 #include "MathTypes.hpp"
+#include "Typedef.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -181,10 +182,10 @@ inline void convertImage(
     ImageFormat destFormat = ImageFormat::UNCHANGED);
 
 template <typename T_Data>
-inline void writeImageToFile(const Image<T_Data>& image, const std::filesystem::path& filename);
+inline void writeImageToFile(const Image<T_Data>& image, const Path& filename);
 
 template <typename T_Data>
-inline Image<T_Data> readImageFromFile(const std::filesystem::path& filename);
+inline Image<T_Data> readImageFromFile(const Path& filename);
 
 
 #include "Image.inl"
