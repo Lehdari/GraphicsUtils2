@@ -28,6 +28,6 @@ bool createWindowVulkanSurface(
     const VkAllocationCallbacks *allocator,
     VkSurfaceKHR* surface);
 
-void getWindowFramebufferSize(WindowObject& window, int* w, int* h);
+void getWindowFramebufferSize(WindowObject* window, int* w, int* h);
 
 } // namespace gu2

@@ -52,7 +52,7 @@ bool gu2::createWindowVulkanSurface(
     return SDL_Vulkan_CreateSurface(window.get(), instance, surface) == SDL_TRUE;
 }
 
-void gu2::getWindowFramebufferSize(WindowObject& window, int* w, int* h)
+void gu2::getWindowFramebufferSize(WindowObject* window, int* w, int* h)
 {
-    SDL_Vulkan_GetDrawableSize(window.get(), w, h);
+    SDL_Vulkan_GetDrawableSize(window->get(), w, h);
 }

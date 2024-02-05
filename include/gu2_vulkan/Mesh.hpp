@@ -22,14 +22,7 @@
 namespace gu2 {
 
 
-// TODO relocate
-struct UniformBufferObject {
-    alignas(16) Mat4f   model;
-    alignas(16) Mat4f   view;
-    alignas(16) Mat4f   projection;
-};
-
-
+class Pipeline;
 class Texture;
 
 
@@ -61,22 +54,13 @@ public:
 
     const VertexAttributesDescription& getVertexAttributesDescription() const;
 
-    // TODO subject to relocation
-    void createDescriptorSetLayout();
-    void createDescriptorPool();
-    void createDescriptorSets(const Texture& texture);
-    VkDescriptorSetLayout getDescriptorSetLayout() const;
-
     void bind(VkCommandBuffer commandBuffer);
     void draw(
         VkCommandBuffer commandBuffer,
-        VkPipelineLayout pipelineLayout,
+        const Pipeline& pipeline,
         uint32_t currentFrame,
         uint32_t uniformId
     ) const;
-
-    void createUniformBuffers();
-    void updateUniformBuffer(VkExtent2D swapChainExtent, uint32_t currentFrame); // TODO subject to relocation
 
 private:
     // Struct containing vertex data input buffer metadata
@@ -91,7 +75,6 @@ private:
     };
 
     // TODO Subject to relocation
-    const VulkanSettings*           _vulkanSettings;
     VkPhysicalDevice                _physicalDevice;
     VkPhysicalDeviceProperties      _physicalDeviceProperties;
     VkDevice                        _device;
@@ -104,15 +87,6 @@ private:
     std::vector<VkDeviceMemory>     _vertexBufferMemories;
     VkBuffer                        _indexBuffer;
     VkDeviceMemory                  _indexBufferMemory;
-
-    std::vector<VkBuffer>           _uniformBuffers;
-    std::vector<VkDeviceMemory>     _uniformBuffersMemory;
-    std::vector<void*>              _uniformBuffersMapped;
-
-    // TODO Subject to relocation
-    VkDescriptorSetLayout           _descriptorSetLayout;
-    VkDescriptorPool                _descriptorPool;
-    std::vector<VkDescriptorSet>    _descriptorSets;
 };
 
 
