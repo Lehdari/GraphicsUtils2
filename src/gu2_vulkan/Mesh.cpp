@@ -42,76 +42,54 @@ Mesh::~Mesh()
     }
     vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
     vkDestroyDescriptorSetLayout(_device, _descriptorSetLayout, nullptr);
-    vkDestroyBuffer(_device, _vertexBuffer, nullptr);
-    vkFreeMemory(_device, _vertexBufferMemory, nullptr);
+    for (auto& vertexAttributeBuffer : _vertexAttributeBuffers)
+        vkDestroyBuffer(_device, vertexAttributeBuffer, nullptr);
+    for (auto& vertexBufferMemory : _vertexBufferMemories)
+        vkFreeMemory(_device, vertexBufferMemory, nullptr);
     vkDestroyBuffer(_device, _indexBuffer, nullptr);
     vkFreeMemory(_device, _indexBufferMemory, nullptr);
 }
 
-void Mesh::createVertexBuffer(VkCommandPool commandPool, VkQueue queue, const std::vector<Vertex>& vertexData)
+void Mesh::upload(VkCommandPool commandPool, VkQueue queue)
 {
-    VkDeviceSize bufferSize = sizeof(vertexData[0]) * vertexData.size();
+    for (const auto& bufferInfo : _vertexBufferInfos) {
+        VkBufferUsageFlagBits bufferType = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        VkBuffer* buffer = &_indexBuffer;
+        VkDeviceMemory* memory = &_indexBufferMemory;
+        if (bufferInfo.type == VertexBufferInfo::ATTRIBUTE) {
+            _vertexAttributeBuffers.emplace_back();
+            _vertexBufferMemories.emplace_back();
+            bufferType = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+            buffer = &_vertexAttributeBuffers.back();
+            memory = &_vertexBufferMemories.back();
+        }
 
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-    createBuffer(_physicalDevice, _device, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+        VkDeviceSize bufferSize = bufferInfo.elementSize * _nIndices;
 
-    void* data;
-    vkMapMemory(_device, stagingBufferMemory, 0, bufferSize, 0, &data);
-    memcpy(data, vertexData.data(), (size_t)bufferSize);
-    vkUnmapMemory(_device, stagingBufferMemory);
+        VkBuffer stagingBuffer;
+        VkDeviceMemory stagingBufferMemory;
+        createBuffer(_physicalDevice, _device, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            stagingBuffer, stagingBufferMemory);
 
-    createBuffer(_physicalDevice, _device, bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _vertexBuffer, _vertexBufferMemory);
+        void* data;
+        vkMapMemory(_device, stagingBufferMemory, 0, bufferSize, 0, &data);
+        memcpy(data, bufferInfo.data, (size_t)bufferSize);
+        vkUnmapMemory(_device, stagingBufferMemory);
 
-    copyBuffer(_device, commandPool, queue, stagingBuffer, _vertexBuffer, bufferSize);
+        createBuffer(_physicalDevice, _device, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | bufferType,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, *buffer, *memory);
 
-    vkDestroyBuffer(_device, stagingBuffer, nullptr);
-    vkFreeMemory(_device, stagingBufferMemory, nullptr);
-}
+        copyBuffer(_device, commandPool, queue, stagingBuffer, *buffer, bufferSize);
 
-void Mesh::createIndexBuffer(VkCommandPool commandPool, VkQueue queue, const std::vector<uint16_t>& indexData)
-{
-    _nIndices = indexData.size();
-    VkDeviceSize bufferSize = sizeof(indexData[0]) * _nIndices;
-
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-    createBuffer(_physicalDevice, _device, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-    void* data;
-    vkMapMemory(_device, stagingBufferMemory, 0, bufferSize, 0, &data);
-    memcpy(data, indexData.data(), (size_t) bufferSize);
-    vkUnmapMemory(_device, stagingBufferMemory);
-
-    createBuffer(_physicalDevice, _device, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-        VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _indexBuffer, _indexBufferMemory);
-
-    copyBuffer(_device, commandPool, queue, stagingBuffer, _indexBuffer, bufferSize);
-
-    vkDestroyBuffer(_device, stagingBuffer, nullptr);
-    vkFreeMemory(_device, stagingBufferMemory, nullptr);
-}
-
-void Mesh::createUniformBuffers()
-{
-    VkDeviceSize bufferSize = padUniformBufferSize(_physicalDeviceProperties, sizeof(UniformBufferObject)) *
-        _vulkanSettings->nBoxes;
-
-    _uniformBuffers.resize(_vulkanSettings->framesInFlight);
-    _uniformBuffersMemory.resize(_vulkanSettings->framesInFlight);
-    _uniformBuffersMapped.resize(_vulkanSettings->framesInFlight);
-
-    for (size_t i = 0; i < _vulkanSettings->framesInFlight; i++) {
-        createBuffer(_physicalDevice, _device, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, _uniformBuffers[i],
-            _uniformBuffersMemory[i]);
-
-        vkMapMemory(_device, _uniformBuffersMemory[i], 0, bufferSize, 0, &_uniformBuffersMapped[i]);
+        vkDestroyBuffer(_device, stagingBuffer, nullptr);
+        vkFreeMemory(_device, stagingBufferMemory, nullptr);
     }
+}
+
+const VertexAttributesDescription& Mesh::getVertexAttributesDescription() const
+{
+    return _attributesDescription;
 }
 
 void Mesh::createDescriptorSetLayout()
@@ -139,11 +117,6 @@ void Mesh::createDescriptorSetLayout()
     if (vkCreateDescriptorSetLayout(_device, &layoutInfo, nullptr, &_descriptorSetLayout) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create descriptor set layout!");
     }
-
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &_descriptorSetLayout;
 }
 
 void Mesh::createDescriptorPool()
@@ -213,11 +186,16 @@ void Mesh::createDescriptorSets(const Texture& texture)
     }
 }
 
+VkDescriptorSetLayout Mesh::getDescriptorSetLayout() const
+{
+    return _descriptorSetLayout;
+}
+
 void Mesh::bind(VkCommandBuffer commandBuffer)
 {
-    VkBuffer vertexBuffers[] = {_vertexBuffer};
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    std::vector<VkDeviceSize> offsets(_vertexAttributeBuffers.size(), 0); // TODO don't generate this every bind
+    vkCmdBindVertexBuffers(commandBuffer, 0, _vertexAttributeBuffers.size(), _vertexAttributeBuffers.data(),
+        offsets.data());
     vkCmdBindIndexBuffer(commandBuffer, _indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 }
 
@@ -231,6 +209,24 @@ void Mesh::draw(
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,
         &_descriptorSets[currentFrame], 1, &offset);
     vkCmdDrawIndexed(commandBuffer, _nIndices, 1, 0, 0, 0);
+}
+
+void Mesh::createUniformBuffers()
+{
+    VkDeviceSize bufferSize = padUniformBufferSize(_physicalDeviceProperties, sizeof(UniformBufferObject)) *
+        _vulkanSettings->nBoxes;
+
+    _uniformBuffers.resize(_vulkanSettings->framesInFlight);
+    _uniformBuffersMemory.resize(_vulkanSettings->framesInFlight);
+    _uniformBuffersMapped.resize(_vulkanSettings->framesInFlight);
+
+    for (size_t i = 0; i < _vulkanSettings->framesInFlight; i++) {
+        createBuffer(_physicalDevice, _device, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, _uniformBuffers[i],
+            _uniformBuffersMemory[i]);
+
+        vkMapMemory(_device, _uniformBuffersMemory[i], 0, bufferSize, 0, &_uniformBuffersMapped[i]);
+    }
 }
 
 void Mesh::updateUniformBuffer(VkExtent2D swapChainExtent, uint32_t currentFrame)
@@ -290,9 +286,3 @@ void Mesh::updateUniformBuffer(VkExtent2D swapChainExtent, uint32_t currentFrame
             padUniformBufferSize(_physicalDeviceProperties, sizeof(ubo))*boxId, &ubo, sizeof(ubo));
     }
 }
-
-VkDescriptorSetLayout Mesh::getDescriptorSetLayout() const
-{
-    return _descriptorSetLayout;
-}
-

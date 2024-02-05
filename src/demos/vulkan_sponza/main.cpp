@@ -171,6 +171,84 @@ public:
                                  {{1.0f, 1.0f, -1.0f}, {1.0f, 1.0f, 0.0f}, {0.25f, 0.5f}},
                                  {{-1.0f, 1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {0.25f, 0.75f}}
                                  },
+        _vertexPositionData     {
+                                    {-1.0f, -1.0f, -1.0f},
+                                    {1.0f, -1.0f, -1.0f},
+                                    {-1.0f, -1.0f, 1.0f},
+                                    {1.0f, -1.0f, 1.0f},
+                                    {1.0f, -1.0f, -1.0f},
+                                    {1.0f, 1.0f, -1.0f},
+                                    {1.0f, -1.0f, 1.0f},
+                                    {1.0f, 1.0f, 1.0f},
+                                    {1.0f, 1.0f, -1.0f},
+                                    {-1.0f, 1.0f, -1.0f},
+                                    {1.0f, 1.0f, 1.0f},
+                                    {-1.0f, 1.0f, 1.0f},
+                                    {-1.0f, 1.0f, -1.0f},
+                                    {-1.0f, -1.0f, -1.0f},
+                                    {-1.0f, 1.0f, 1.0f},
+                                    {-1.0f, -1.0f, 1.0f},
+                                    {-1.0f, -1.0f, 1.0f},
+                                    {1.0f, -1.0f, 1.0f},
+                                    {-1.0f, 1.0f, 1.0f},
+                                    {1.0f, 1.0f, 1.0f},
+                                    {1.0f, -1.0f, -1.0f},
+                                    {-1.0f, -1.0f, -1.0f},
+                                    {1.0f, 1.0f, -1.0f},
+                                    {-1.0f, 1.0f, -1.0f}
+                                },
+        _vertexColorData        {
+                                    {0.0f, 0.0f, 0.0f},
+                                    {1.0f, 0.0f, 0.0f},
+                                    {0.0f, 0.0f, 1.0f},
+                                    {1.0f, 0.0f, 1.0f},
+                                    {1.0f, 0.0f, 0.0f},
+                                    {1.0f, 1.0f, 0.0f},
+                                    {1.0f, 0.0f, 1.0f},
+                                    {1.0f, 1.0f, 1.0f},
+                                    {1.0f, 1.0f, 0.0f},
+                                    {0.0f, 1.0f, 0.0f},
+                                    {1.0f, 1.0f, 1.0f},
+                                    {0.0f, 1.0f, 1.0f},
+                                    {0.0f, 1.0f, 0.0f},
+                                    {0.0f, 0.0f, 0.0f},
+                                    {0.0f, 1.0f, 1.0f},
+                                    {0.0f, 0.0f, 1.0f},
+                                    {0.0f, 0.0f, 1.0f},
+                                    {1.0f, 0.0f, 1.0f},
+                                    {0.0f, 1.0f, 1.0f},
+                                    {1.0f, 1.0f, 1.0f},
+                                    {1.0f, 0.0f, 0.0f},
+                                    {0.0f, 0.0f, 0.0f},
+                                    {1.0f, 1.0f, 0.0f},
+                                    {0.0f, 1.0f, 0.0f}
+                                },
+        _vertexTexCoordData     {
+                                    {0.0f, 0.0f},
+                                    {0.0f, 0.25f},
+                                    {0.25f, 0.0f},
+                                    {0.25f, 0.25f},
+                                    {0.5f, 0.0f},
+                                    {0.5f, 0.25f},
+                                    {0.75f, 0.0f},
+                                    {0.75f, 0.25f},
+                                    {0.75f, 0.25f},
+                                    {0.75f, 0.5f},
+                                    {1.0f, 0.25f},
+                                    {1.0f, 0.5f},
+                                    {0.25f, 0.75f},
+                                    {0.25f, 1.0f},
+                                    {0.5f, 0.75f},
+                                    {0.5f, 1.0f},
+                                    {0.75f, 0.75f},
+                                    {0.75f, 1.0f},
+                                    {1.0f, 0.75f},
+                                    {1.0f, 1.0f},
+                                    {0.0f, 0.5f},
+                                    {0.0f, 0.75f},
+                                    {0.25f, 0.5f},
+                                    {0.25f, 0.75f}
+                                },
         _indexData              {0, 1, 3, 0, 3, 2,
                                  4, 5, 7, 4, 7, 6,
                                  8, 9, 11, 8, 11, 10,
@@ -218,20 +296,25 @@ public:
         createSwapChain();
         createImageViews();
         createRenderPass();
-        //createDescriptorSetLayout();
         createCommandPool();
         _texture = std::make_unique<gu2::Texture>(_vulkanPhysicalDevice, _vulkanDevice, _vulkanCommandPool,
             _vulkanGraphicsQueue, gu2::Path(ASSETS_DIR) / "textures/box.png");
         _mesh = std::make_unique<gu2::Mesh>(_vulkanSettings, _vulkanPhysicalDevice, _vulkanDevice);
-        _mesh->createVertexBuffer(_vulkanCommandPool, _vulkanGraphicsQueue, _vertexData);
-        _mesh->createIndexBuffer(_vulkanCommandPool, _vulkanGraphicsQueue, _indexData);
+//        _mesh->addVertexAttribute(0, _vertexPositionData.data());
+//        _mesh->addVertexAttribute(1, _vertexColorData.data());
+//        _mesh->addVertexAttribute(2, _vertexTexCoordData.data());
+        _mesh->addVertexAttribute<gu2::Vertex, gu2::Vec3f>(0, offsetof(gu2::Vertex, p), _vertexData.data());
+        _mesh->addVertexAttribute<gu2::Vertex, gu2::Vec3f>(1, offsetof(gu2::Vertex, c), _vertexData.data());
+        _mesh->addVertexAttribute<gu2::Vertex, gu2::Vec2f>(2, offsetof(gu2::Vertex, t), _vertexData.data());
+        _mesh->setIndices(_indexData.data(), _indexData.size());
+        _mesh->upload(_vulkanCommandPool, _vulkanGraphicsQueue);
         _mesh->createDescriptorSetLayout();
-        _mesh->createDescriptorSets(*_texture);
         createGraphicsPipeline();
         createDepthResources();
         createFramebuffers();
         createCommandBuffers();
         createSyncObjects();
+        _mesh->createDescriptorSets(*_texture);
     }
 
     void createInstance()
@@ -681,15 +764,7 @@ public:
         VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
         // Vertex input info
-        auto bindingDescription = gu2::Vertex::getBindingDescription();
-        auto attributeDescriptions = gu2::Vertex::getAttributeDescriptions();
-
-        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputInfo.vertexBindingDescriptionCount = 1;
-        vertexInputInfo.pVertexBindingDescriptions = &bindingDescription; // Optional
-        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-        vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data(); // Optional
+        auto vertexInputInfo = _mesh->getVertexAttributesDescription().getPipelineVertexInputStateCreateInfo();
 
         // Input assembly
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -1110,6 +1185,9 @@ private:
     std::unique_ptr<gu2::Mesh>      _mesh;
 
     std::vector<gu2::Vertex>        _vertexData;
+    std::vector<gu2::Vec3f>         _vertexPositionData;
+    std::vector<gu2::Vec3f>         _vertexColorData;
+    std::vector<gu2::Vec2f>         _vertexTexCoordData;
     std::vector<uint16_t>           _indexData;
     uint64_t                        _currentFrame;
     bool                            _framebufferResized;

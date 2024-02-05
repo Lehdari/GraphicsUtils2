@@ -11,6 +11,7 @@
 #pragma once
 
 
+#include "VertexAttributesDescription.hpp"
 #include "VulkanSettings.hpp"
 #include "gu2_util/MathTypes.hpp"
 #include "gu2_util/Typedef.hpp"
@@ -26,37 +27,6 @@ struct Vertex {
     Vec3f  p;  // position
     Vec3f  c;  // color
     Vec2f  t;  // texture coordinates
-
-    static VkVertexInputBindingDescription getBindingDescription()
-    {
-        VkVertexInputBindingDescription bindingDescription{};
-
-        bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Vertex);
-        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-        return bindingDescription;
-    }
-
-    static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions()
-    {
-        std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
-
-        attributeDescriptions[0].binding = 0;
-        attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(Vertex, p);
-        attributeDescriptions[1].binding = 0;
-        attributeDescriptions[1].location = 1;
-        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Vertex, c);
-        attributeDescriptions[2].binding = 0;
-        attributeDescriptions[2].location = 2;
-        attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-        attributeDescriptions[2].offset = offsetof(Vertex, t);
-
-        return attributeDescriptions;
-    }
 };
 
 // TODO relocate
@@ -81,14 +51,28 @@ public:
     Mesh& operator=(Mesh&&) = default;
     ~Mesh();
 
-    void createVertexBuffer(VkCommandPool commandPool, VkQueue queue, const std::vector<Vertex>& vertexData);
-    void createIndexBuffer(VkCommandPool commandPool, VkQueue queue, const std::vector<uint16_t>& indexData);
-    void createUniformBuffers();
+    // Add vertex attribute from single attribute array
+    template <typename T_Attribute>
+    void addVertexAttribute(uint32_t location, const T_Attribute* data);
+    // Add vertex attribute from combined(interleaved) vertex data array (offset w.r.t. the beginning of T_Vertex
+    // struct)
+    template <typename T_Vertex, typename T_Attribute>
+    void addVertexAttribute(uint32_t location, std::size_t offset, const T_Vertex* data);
+    // Set mesh indices, note that all provided attribute and index arrays must contain at least nIndices elements.
+    template <typename T_Index> // T_Index must be either uint16_t or uint32_t
+    void setIndices(const T_Index* data, uint32_t nIndices);
+
+    // Upload the mesh to GPU, all provided vertex attribute and index arrays must remain valid until the execution
+    // of upload is finished.
+    void upload(VkCommandPool commandPool, VkQueue queue);
+
+    const VertexAttributesDescription& getVertexAttributesDescription() const;
 
     // TODO subject to relocation
     void createDescriptorSetLayout();
     void createDescriptorPool();
     void createDescriptorSets(const Texture& texture);
+    VkDescriptorSetLayout getDescriptorSetLayout() const;
 
     void bind(VkCommandBuffer commandBuffer);
     void draw(
@@ -98,22 +82,36 @@ public:
         uint32_t uniformId
     ) const;
 
+    void createUniformBuffers();
     void updateUniformBuffer(VkExtent2D swapChainExtent, uint32_t currentFrame); // TODO subject to relocation
 
-    VkDescriptorSetLayout getDescriptorSetLayout() const;
-
 private:
+    // Struct containing vertex data input buffer metadata
+    struct VertexBufferInfo {
+        uint32_t        location;       // Attribute location, not used for index buffer
+        const void*     data;           // Pointer to the input data array
+        size_t          elementSize;    // Size of an element in bytes
+        enum {
+            ATTRIBUTE,
+            INDEX
+        }               type;           // Type enum enables VertexBufferInfo usage for both attribute and index inputs
+    };
+
     // TODO Subject to relocation
     const VulkanSettings*           _vulkanSettings;
     VkPhysicalDevice                _physicalDevice;
     VkPhysicalDeviceProperties      _physicalDeviceProperties;
     VkDevice                        _device;
 
-    VkBuffer                        _vertexBuffer;
-    VkDeviceMemory                  _vertexBufferMemory;
-    VkBuffer                        _indexBuffer;
+    VertexAttributesDescription     _attributesDescription;
+    std::vector<VertexBufferInfo>   _vertexBufferInfos;
     uint32_t                        _nIndices;
+
+    std::vector<VkBuffer>           _vertexAttributeBuffers;
+    std::vector<VkDeviceMemory>     _vertexBufferMemories;
+    VkBuffer                        _indexBuffer;
     VkDeviceMemory                  _indexBufferMemory;
+
     std::vector<VkBuffer>           _uniformBuffers;
     std::vector<VkDeviceMemory>     _uniformBuffersMemory;
     std::vector<void*>              _uniformBuffersMapped;
@@ -123,6 +121,50 @@ private:
     VkDescriptorPool                _descriptorPool;
     std::vector<VkDescriptorSet>    _descriptorSets;
 };
+
+
+template <typename T_Attribute>
+void Mesh::addVertexAttribute(uint32_t location, const T_Attribute* data)
+{
+    _attributesDescription.addAttribute<T_Attribute, T_Attribute>(location, location, 0);
+
+    // Rewrite existing handle with the specified location in case one was found
+    for (auto& bufferHandle : _vertexBufferInfos) {
+        if (bufferHandle.location == location) {
+            bufferHandle.data = data;
+            bufferHandle.elementSize = sizeof(T_Attribute);
+            bufferHandle.type = VertexBufferInfo::ATTRIBUTE;
+            return;
+        }
+    }
+
+    _vertexBufferInfos.emplace_back(location, data, sizeof(T_Attribute), VertexBufferInfo::ATTRIBUTE);
+}
+
+template <typename T_Vertex, typename T_Attribute>
+void Mesh::addVertexAttribute(uint32_t location, std::size_t offset, const T_Vertex* data)
+{
+    _attributesDescription.addAttribute<T_Vertex, T_Attribute>(0, location, offset);
+
+    // Rewrite existing handle with the specified location in case one was found
+    for (auto& bufferHandle : _vertexBufferInfos) {
+        if (bufferHandle.location == location) {
+            bufferHandle.data = data;
+            bufferHandle.elementSize = sizeof(T_Vertex);
+            bufferHandle.type = VertexBufferInfo::ATTRIBUTE;
+            return;
+        }
+    }
+
+    _vertexBufferInfos.emplace_back(location, data, sizeof(T_Vertex), VertexBufferInfo::ATTRIBUTE);
+}
+
+template <typename T_Index>
+void Mesh::setIndices(const T_Index* data, uint32_t nIndices)
+{
+    _vertexBufferInfos.emplace_back(0, data, sizeof(T_Index), VertexBufferInfo::INDEX);
+    _nIndices = nIndices;
+}
 
 
 } // namespace gu2
