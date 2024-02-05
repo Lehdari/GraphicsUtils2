@@ -11,6 +11,8 @@
 #pragma once
 
 
+#include "gu2_util/MathTypes.hpp"
+
 #include <vulkan/vulkan.h>
 
 
@@ -429,6 +431,15 @@ inline size_t padUniformBufferSize(VkPhysicalDeviceProperties physicalDeviceProp
     }
     return alignedSize;
 }
+
+
+// Metaclass template for conversion from vector types to VkFormat (mostly for mapping vertex attributes)
+template <typename T_Matrix> struct AttributeFormat_Impl {};
+template <> struct AttributeFormat_Impl<Vec2f> { static constexpr VkFormat format {VK_FORMAT_R32G32_SFLOAT}; };
+template <> struct AttributeFormat_Impl<Vec3f> { static constexpr VkFormat format {VK_FORMAT_R32G32B32_SFLOAT}; };
+// alias for streamlined usage, example: AttributeFormat<Vec3f>
+template <typename T_Matrix>
+inline constexpr VkFormat AttributeFormat = AttributeFormat_Impl<T_Matrix>::format;
 
 
 } // namespace gu2
