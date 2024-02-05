@@ -145,32 +145,6 @@ public:
         Window<VulkanWindow>    (windowSettings),
         _vulkanSettings         (vulkanSettings),
         _vulkanPhysicalDevice   (VK_NULL_HANDLE),
-        _vertexData             {
-                                 {{-1.0f, -1.0f, -1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-                                 {{1.0f, -1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.25f}},
-                                 {{-1.0f, -1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, {0.25f, 0.0f}},
-                                 {{1.0f, -1.0f, 1.0f}, {1.0f, 0.0f, 1.0f}, {0.25f, 0.25f}},
-                                 {{1.0f, -1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.5f, 0.0f}},
-                                 {{1.0f, 1.0f, -1.0f}, {1.0f, 1.0f, 0.0f}, {0.5f, 0.25f}},
-                                 {{1.0f, -1.0f, 1.0f}, {1.0f, 0.0f, 1.0f}, {0.75f, 0.0f}},
-                                 {{1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.75f, 0.25f}},
-                                 {{1.0f, 1.0f, -1.0f}, {1.0f, 1.0f, 0.0f}, {0.75f, 0.25f}},
-                                 {{-1.0f, 1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {0.75f, 0.5f}},
-                                 {{1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.25f}},
-                                 {{-1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 1.0f}, {1.0f, 0.5f}},
-                                 {{-1.0f, 1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {0.25f, 0.75f}},
-                                 {{-1.0f, -1.0f, -1.0f}, {0.0f, 0.0f, 0.0f}, {0.25f, 1.0f}},
-                                 {{-1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 1.0f}, {0.5f, 0.75f}},
-                                 {{-1.0f, -1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, {0.5f, 1.0f}},
-                                 {{-1.0f, -1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, {0.75f, 0.75f}},
-                                 {{1.0f, -1.0f, 1.0f}, {1.0f, 0.0f, 1.0f}, {0.75f, 1.0f}},
-                                 {{-1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 1.0f}, {1.0f, 0.75f}},
-                                 {{1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-                                 {{1.0f, -1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.5f}},
-                                 {{-1.0f, -1.0f, -1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.75f}},
-                                 {{1.0f, 1.0f, -1.0f}, {1.0f, 1.0f, 0.0f}, {0.25f, 0.5f}},
-                                 {{-1.0f, 1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {0.25f, 0.75f}}
-                                 },
         _vertexPositionData     {
                                     {-1.0f, -1.0f, -1.0f},
                                     {1.0f, -1.0f, -1.0f},
@@ -300,12 +274,9 @@ public:
         _texture = std::make_unique<gu2::Texture>(_vulkanPhysicalDevice, _vulkanDevice, _vulkanCommandPool,
             _vulkanGraphicsQueue, gu2::Path(ASSETS_DIR) / "textures/box.png");
         _mesh = std::make_unique<gu2::Mesh>(_vulkanSettings, _vulkanPhysicalDevice, _vulkanDevice);
-//        _mesh->addVertexAttribute(0, _vertexPositionData.data());
-//        _mesh->addVertexAttribute(1, _vertexColorData.data());
-//        _mesh->addVertexAttribute(2, _vertexTexCoordData.data());
-        _mesh->addVertexAttribute<gu2::Vertex, gu2::Vec3f>(0, offsetof(gu2::Vertex, p), _vertexData.data());
-        _mesh->addVertexAttribute<gu2::Vertex, gu2::Vec3f>(1, offsetof(gu2::Vertex, c), _vertexData.data());
-        _mesh->addVertexAttribute<gu2::Vertex, gu2::Vec2f>(2, offsetof(gu2::Vertex, t), _vertexData.data());
+        _mesh->addVertexAttribute(0, _vertexPositionData.data());
+        _mesh->addVertexAttribute(1, _vertexColorData.data());
+        _mesh->addVertexAttribute(2, _vertexTexCoordData.data());
         _mesh->setIndices(_indexData.data(), _indexData.size());
         _mesh->upload(_vulkanCommandPool, _vulkanGraphicsQueue);
         _mesh->createDescriptorSetLayout();
@@ -1184,7 +1155,6 @@ private:
     std::unique_ptr<gu2::Texture>   _texture;
     std::unique_ptr<gu2::Mesh>      _mesh;
 
-    std::vector<gu2::Vertex>        _vertexData;
     std::vector<gu2::Vec3f>         _vertexPositionData;
     std::vector<gu2::Vec3f>         _vertexColorData;
     std::vector<gu2::Vec2f>         _vertexTexCoordData;

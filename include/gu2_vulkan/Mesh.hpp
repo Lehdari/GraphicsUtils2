@@ -22,13 +22,6 @@
 namespace gu2 {
 
 
-// TODO will be changed to separate attribute arrays
-struct Vertex {
-    Vec3f  p;  // position
-    Vec3f  c;  // color
-    Vec2f  t;  // texture coordinates
-};
-
 // TODO relocate
 struct UniformBufferObject {
     alignas(16) Mat4f   model;
