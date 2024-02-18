@@ -21,7 +21,6 @@ struct VulkanSettings {
     std::vector<const char*>    validationLayers        {"VK_LAYER_KHRONOS_validation"};
     std::vector<const char*>    deviceExtensions        {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
     int                         framesInFlight          {2};
-    int                         nBoxes                  {3}; // TODO obviously this doesn't belong here
 };
 
 } // namespace gu2

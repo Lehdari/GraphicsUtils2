@@ -20,7 +20,8 @@
 using namespace gu2;
 
 
-Mesh::Mesh(const VulkanSettings& vulkanSettings,
+Mesh::Mesh(
+    const VulkanSettings& vulkanSettings,
     VkPhysicalDevice physicalDevice,
     VkDevice device
 ) :

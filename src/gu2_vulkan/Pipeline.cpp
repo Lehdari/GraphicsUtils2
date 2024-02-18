@@ -25,7 +25,8 @@ Pipeline::Pipeline(
     VkPhysicalDevice physicalDevice,
     VkDevice device,
     VkSurfaceKHR surface,
-    WindowObject* window
+    WindowObject* window,
+    uint32_t nUniforms
 ) :
     _vulkanSettings     (&vulkanSettings),
     _physicalDevice     (physicalDevice),
@@ -33,7 +34,8 @@ Pipeline::Pipeline(
     _surface            (surface),
     _window             (window),
     _framebufferResized (false),
-    _currentFrame       (0)
+    _currentFrame       (0),
+    _nUniforms          (nUniforms)
 {
     // Store the device properties in local struct
     vkGetPhysicalDeviceProperties(_physicalDevice, &_physicalDeviceProperties);
@@ -94,7 +96,7 @@ void Pipeline::createDescriptorPool()
 {
     std::array<VkDescriptorPoolSize, 2> poolSizes{};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    poolSizes[0].descriptorCount = static_cast<uint32_t>(_vulkanSettings->framesInFlight * _vulkanSettings->nBoxes);
+    poolSizes[0].descriptorCount = static_cast<uint32_t>(_vulkanSettings->framesInFlight * _nUniforms);
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     poolSizes[1].descriptorCount = static_cast<uint32_t>(_vulkanSettings->framesInFlight);
 
@@ -669,8 +671,7 @@ void Pipeline::framebufferResized()
 
 void Pipeline::createUniformBuffers()
 {
-    VkDeviceSize bufferSize = padUniformBufferSize(_physicalDeviceProperties, sizeof(UniformBufferObject)) *
-        _vulkanSettings->nBoxes;
+    VkDeviceSize bufferSize = padUniformBufferSize(_physicalDeviceProperties, sizeof(UniformBufferObject)) * _nUniforms;
 
     _uniformBuffers.resize(_vulkanSettings->framesInFlight);
     _uniformBuffersMemory.resize(_vulkanSettings->framesInFlight);
@@ -691,10 +692,10 @@ void Pipeline::updateUniformBuffer(VkExtent2D swapChainExtent, uint32_t currentF
     auto currentTime = std::chrono::high_resolution_clock::now();
     double time = std::chrono::duration<double, std::chrono::seconds::period>(currentTime - startTime).count();
 
-    for (int boxId=0; boxId<_vulkanSettings->nBoxes; ++boxId) {
+    for (int boxId=0; boxId<_nUniforms; ++boxId) {
         gu2::UniformBufferObject ubo;
         // Model matrix
-        double boxPosAngle = boxId / (double)_vulkanSettings->nBoxes;
+        double boxPosAngle = boxId / (double)_nUniforms;
         gu2::Vec3f modelPos(std::cos(boxPosAngle*2.0*M_PI + 0.25*time), 0.0f, std::sin(boxPosAngle*2.0*M_PI + 0.25*time));
         modelPos *= 2.0f;
         ubo.model <<

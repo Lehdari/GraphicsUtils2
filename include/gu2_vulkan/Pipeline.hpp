@@ -40,7 +40,8 @@ public:
         VkPhysicalDevice physicalDevice,
         VkDevice device,
         VkSurfaceKHR surface,
-        WindowObject* window
+        WindowObject* window,
+        uint32_t nUniforms
     );
     Pipeline(const Pipeline& pipeline) = delete;
     Pipeline(Pipeline&& pipeline) = delete;
@@ -91,6 +92,7 @@ private:
     VkDevice                        _device;
     VkSurfaceKHR                    _surface;
     WindowObject*                   _window;
+    uint32_t                        _nUniforms;
 
     VkImage                         _depthImage;
     VkDeviceMemory                  _depthImageMemory;

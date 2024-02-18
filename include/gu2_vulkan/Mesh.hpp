@@ -28,7 +28,8 @@ class Texture;
 
 class Mesh {
 public:
-    Mesh(const VulkanSettings& vulkanSettings,
+    Mesh(
+        const VulkanSettings& vulkanSettings,
         VkPhysicalDevice physicalDevice,
         VkDevice device);
     Mesh(const Mesh&) = delete; // TODO

@@ -213,7 +213,8 @@ public:
                                  8, 9, 11, 8, 11, 10,
                                  12, 13, 15, 12, 15, 14,
                                  16, 17, 19, 16, 19, 18,
-                                 20, 21, 23, 20, 23, 22}
+                                 20, 21, 23, 20, 23, 22},
+        _nBoxes                 {3}
     {
         initVulkan();
     }
@@ -243,7 +244,7 @@ public:
         selectPhysicalDevice();
         createLogicalDevice();
         _pipeline = std::make_unique<gu2::Pipeline>(_vulkanSettings, _vulkanPhysicalDevice, _vulkanDevice,
-            _vulkanSurface, &_window);
+            _vulkanSurface, &_window, _nBoxes);
         _pipeline->createSwapChain();
         _pipeline->createImageViews();
         _pipeline->createRenderPass();
@@ -484,7 +485,7 @@ public:
 
         _mesh->bind(commandBuffer);
 
-        for (uint32_t boxId=0; boxId<_vulkanSettings.nBoxes; ++boxId) {
+        for (uint32_t boxId=0; boxId<_nBoxes; ++boxId) {
             _mesh->draw(commandBuffer, *_pipeline, _pipeline->getCurrentFrame(), boxId);
         }
 
@@ -548,6 +549,7 @@ private:
     std::vector<gu2::Vec3f>         _vertexColorData;
     std::vector<gu2::Vec2f>         _vertexTexCoordData;
     std::vector<uint16_t>           _indexData;
+    uint32_t                        _nBoxes;
 };
 
 
