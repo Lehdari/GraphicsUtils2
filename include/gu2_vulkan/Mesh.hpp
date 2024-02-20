@@ -24,10 +24,20 @@ namespace gu2 {
 
 class Pipeline;
 class Texture;
+class GLTFLoader;
 
 
 class Mesh {
 public:
+    static void createMeshesFromGLTF(
+        const GLTFLoader& gltfLoader,
+        std::vector<Mesh>* meshes,
+        const VulkanSettings& vulkanSettings,
+        VkPhysicalDevice physicalDevice,
+        VkDevice device,
+        VkCommandPool commandPool,
+        VkQueue queue);
+
     Mesh(
         const VulkanSettings& vulkanSettings,
         VkPhysicalDevice physicalDevice,
@@ -40,14 +50,14 @@ public:
 
     // Add vertex attribute from single attribute array
     template <typename T_Attribute>
-    void addVertexAttribute(uint32_t location, const T_Attribute* data);
+    void addVertexAttribute(uint32_t location, const T_Attribute* data); // TODO add stride
     // Add vertex attribute from combined(interleaved) vertex data array (offset w.r.t. the beginning of T_Vertex
     // struct)
     template <typename T_Vertex, typename T_Attribute>
     void addVertexAttribute(uint32_t location, std::size_t offset, const T_Vertex* data);
     // Set mesh indices, note that all provided attribute and index arrays must contain at least nIndices elements.
     template <typename T_Index> // T_Index must be either uint16_t or uint32_t
-    void setIndices(const T_Index* data, uint32_t nIndices);
+    void setIndices(const T_Index* data, uint32_t nIndices); // TODO add stride
 
     // Upload the mesh to GPU, all provided vertex attribute and index arrays must remain valid until the execution
     // of upload is finished.

@@ -12,12 +12,105 @@
 #include "Pipeline.hpp"
 #include "Texture.hpp"
 #include "Util.hpp"
-#include "gu2_util/Image.hpp"
+#include "gu2_util/GLTFLoader.hpp"
 
 #include <stdexcept>
 
 
 using namespace gu2;
+
+
+void Mesh::createMeshesFromGLTF(
+    const GLTFLoader& gltfLoader,
+    std::vector<Mesh>* meshes,
+    const VulkanSettings& vulkanSettings,
+    VkPhysicalDevice physicalDevice,
+    VkDevice device,
+    VkCommandPool commandPool,
+    VkQueue queue
+) {
+    auto& loaderMeshes = gltfLoader.getMeshes();
+
+    // Count the number of primitives (one gu2::Mesh corresponds to a single GLTF mesh primitive, not mesh)
+    size_t nPrimitives = 0;
+    for (const auto& m : loaderMeshes)
+        nPrimitives += m.primitives.size();
+
+    meshes->clear();
+    meshes->reserve(nPrimitives);
+
+    for (const auto& m : loaderMeshes) {
+        for (const auto& p : m.primitives) {
+            meshes->emplace_back(vulkanSettings, physicalDevice, device);
+            auto& mesh = meshes->back();
+
+            if (p.indices < 0) {
+                fprintf(stderr, "WARNING: Unindexed meshes not currently supported, skipping...\n");
+                continue;
+            }
+
+            printf("==============\n");
+            // Add vertex attributes
+            for (const auto& attribute : p.attributes) {
+                printf("%s\n", attribute.name.c_str());
+                if (attribute.accessorId < 0)
+                    throw std::runtime_error("No accessor ID for attribute \"" + attribute.name + "\" defined");
+                auto& accessor = gltfLoader.getAccessors().at(attribute.accessorId);
+                if (accessor.bufferView < 0)
+                    throw std::runtime_error("No buffer view for attribute \"" + attribute.name + "\" defined");
+                auto& bufferView = gltfLoader.getBufferViews().at(accessor.bufferView);
+                if (bufferView.buffer < 0)
+                    throw std::runtime_error("No buffer for attribute \"" + attribute.name + "\" defined");
+                auto& buffer = gltfLoader.getBuffers().at(bufferView.buffer);
+                if (buffer.buffer == nullptr)
+                    throw std::runtime_error("No buffer loaded");
+
+                if (attribute.name == "POSITION") {
+                    if (accessor.componentType == GLTFLoader::Accessor::ComponentType::FLOAT &&
+                        accessor.type == "VEC3") {
+                        printf("Adding position, stride: %lu\n", bufferView.byteStride);
+                        mesh.addVertexAttribute<Vec3f>(0,
+                            reinterpret_cast<Vec3f*>(buffer.buffer + bufferView.byteOffset));
+                    }
+                }
+            }
+
+            // Add index attributes
+            {
+                if (p.indices < 0)
+                    throw std::runtime_error("No accessor ID for indices defined");
+                auto& accessor = gltfLoader.getAccessors().at(p.indices);
+                if (accessor.bufferView < 0)
+                    throw std::runtime_error("No buffer view for indices defined");
+                auto& bufferView = gltfLoader.getBufferViews().at(accessor.bufferView);
+                if (bufferView.buffer < 0)
+                    throw std::runtime_error("No buffer for indices defined");
+                auto& buffer = gltfLoader.getBuffers().at(bufferView.buffer);
+                if (buffer.buffer == nullptr)
+                    throw std::runtime_error("No buffer loaded");
+
+                if (accessor.type != "SCALAR")
+                    throw std::runtime_error("Invalid accessor for indices, type not \"SCALAR\"");
+
+                printf("Adding indices, stride: %lu\n", bufferView.byteStride);
+                switch (accessor.componentType) {
+                    case GLTFLoader::Accessor::ComponentType::UNSIGNED_SHORT:
+                        mesh.setIndices(reinterpret_cast<uint16_t*>(buffer.buffer + bufferView.byteOffset),
+                            accessor.count);
+                        break;
+                    case GLTFLoader::Accessor::ComponentType::UNSIGNED_INT:
+                        mesh.setIndices(reinterpret_cast<uint32_t*>(buffer.buffer + bufferView.byteOffset),
+                            accessor.count);
+                        break;
+                    default:
+                        throw std::runtime_error("Invalid accessor for indices, component type not \"UNSIGNED_SHORT\" or \"UNSIGNED_INT\"");
+                }
+            }
+
+            mesh.upload(commandPool, queue);
+        }
+    }
+}
 
 
 Mesh::Mesh(
