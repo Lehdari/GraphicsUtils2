@@ -224,6 +224,7 @@ public:
         // Wait for the Vulkan device to finish its tasks
         vkDeviceWaitIdle(_vulkanDevice);
         _mesh.reset();
+        _meshes.clear();
         _texture.reset();
         _pipeline.reset();
         vkDestroyDevice(_vulkanDevice, nullptr);
@@ -257,6 +258,13 @@ public:
         _mesh->addVertexAttribute(2, _vertexTexCoordData.data());
         _mesh->setIndices(_indexData.data(), _indexData.size());
         _mesh->upload(_pipeline->getCommandPool(), _vulkanGraphicsQueue);
+
+        // Load sponza (TODO move elsewhere)
+        gu2::GLTFLoader sponzaLoader;
+        sponzaLoader.readFromFile(gu2::Path(ASSETS_DIR) / "sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");
+        gu2::Mesh::createMeshesFromGLTF(sponzaLoader, &_meshes,
+            _vulkanSettings, _vulkanPhysicalDevice, _vulkanDevice, _pipeline->getCommandPool(), _vulkanGraphicsQueue);
+
         _pipeline->createDescriptorSetLayout();
 
         // Shaders
@@ -266,7 +274,8 @@ public:
         _pipeline->createGraphicsPipeline(
             createShaderModule(vertShaderCode),
             createShaderModule(fragShaderCode),
-            _mesh->getVertexAttributesDescription().getPipelineVertexInputStateCreateInfo()
+            // TODO add functionality for multiple vertex attribute descriptions (and descr. caching)
+            _meshes[0].getVertexAttributesDescription().getPipelineVertexInputStateCreateInfo()
         );
         _pipeline->createDepthResources(_vulkanGraphicsQueue);
         _pipeline->createFramebuffers();
@@ -483,10 +492,15 @@ public:
 
         _pipeline->recordRenderPassCommands(commandBuffer, imageIndex);
 
-        _mesh->bind(commandBuffer);
+//        _mesh->bind(commandBuffer);
+//
+//        for (uint32_t boxId=0; boxId<_nBoxes; ++boxId) {
+//            _mesh->draw(commandBuffer, *_pipeline, _pipeline->getCurrentFrame(), boxId);
+//        }
 
-        for (uint32_t boxId=0; boxId<_nBoxes; ++boxId) {
-            _mesh->draw(commandBuffer, *_pipeline, _pipeline->getCurrentFrame(), boxId);
+        for (int i=0; i<3; ++i) {
+            _meshes[i].bind(commandBuffer);
+            _meshes[i].draw(commandBuffer, *_pipeline, _pipeline->getCurrentFrame(), i);
         }
 
         vkCmdEndRenderPass(commandBuffer);
@@ -544,6 +558,7 @@ private:
     std::unique_ptr<gu2::Pipeline>  _pipeline;
     std::unique_ptr<gu2::Texture>   _texture;
     std::unique_ptr<gu2::Mesh>      _mesh;
+    std::vector<gu2::Mesh>          _meshes;
 
     std::vector<gu2::Vec3f>         _vertexPositionData;
     std::vector<gu2::Vec3f>         _vertexColorData;
@@ -555,9 +570,6 @@ private:
 
 int main(void)
 {
-    gu2::GLTFLoader sponzaLoader;
-    sponzaLoader.load(gu2::Path(ASSETS_DIR) / "sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");
-
     gu2::WindowSettings windowSettings;
     windowSettings.name = "Hello Vulkan Box!";
     windowSettings.w = 800;
