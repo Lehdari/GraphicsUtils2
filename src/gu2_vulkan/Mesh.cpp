@@ -68,14 +68,16 @@ void Mesh::createMeshesFromGLTF(
                 if (attribute.name == "POSITION") {
                     if (accessor.componentType == GLTFLoader::Accessor::ComponentType::FLOAT &&
                         accessor.type == "VEC3") {
-                        printf("Adding position, stride: %lu\n", bufferView.byteStride);
-                        mesh.addVertexAttribute<Vec3f>(0,
-                            reinterpret_cast<Vec3f*>(buffer.buffer + bufferView.byteOffset));
+                        printf("Adding position, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
+                        mesh.addVertexAttribute(0, reinterpret_cast<Vec3f*>(buffer.buffer + bufferView.byteOffset),
+                            accessor.count, bufferView.byteStride);
                     }
+                    else
+                        throw std::runtime_error("Unsupported attribute format for \"POSITION\"");
                 }
             }
 
-            // Add index attributes
+            // Add indices
             {
                 if (p.indices < 0)
                     throw std::runtime_error("No accessor ID for indices defined");
@@ -92,15 +94,15 @@ void Mesh::createMeshesFromGLTF(
                 if (accessor.type != "SCALAR")
                     throw std::runtime_error("Invalid accessor for indices, type not \"SCALAR\"");
 
-                printf("Adding indices, stride: %lu\n", bufferView.byteStride);
+                printf("Adding indices, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
                 switch (accessor.componentType) {
                     case GLTFLoader::Accessor::ComponentType::UNSIGNED_SHORT:
                         mesh.setIndices(reinterpret_cast<uint16_t*>(buffer.buffer + bufferView.byteOffset),
-                            accessor.count);
+                            accessor.count, bufferView.byteStride);
                         break;
                     case GLTFLoader::Accessor::ComponentType::UNSIGNED_INT:
                         mesh.setIndices(reinterpret_cast<uint32_t*>(buffer.buffer + bufferView.byteOffset),
-                            accessor.count);
+                            accessor.count, bufferView.byteStride);
                         break;
                     default:
                         throw std::runtime_error("Invalid accessor for indices, component type not \"UNSIGNED_SHORT\" or \"UNSIGNED_INT\"");
@@ -149,7 +151,7 @@ void Mesh::upload(VkCommandPool commandPool, VkQueue queue)
             memory = &_vertexBufferMemories.back();
         }
 
-        VkDeviceSize bufferSize = bufferInfo.elementSize * _nIndices;
+        VkDeviceSize bufferSize = bufferInfo.elementSize * bufferInfo.nElements;
 
         VkBuffer stagingBuffer;
         VkDeviceMemory stagingBufferMemory;

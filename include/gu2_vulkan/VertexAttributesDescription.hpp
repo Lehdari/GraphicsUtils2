@@ -26,10 +26,10 @@ namespace gu2 {
 class VertexAttributesDescription {
 public:
     template <typename T_VertexOrAttribute>
-    void addBinding(uint32_t binding);
+    void addBinding(uint32_t binding, uint32_t stride=0);
 
     template <typename T_VertexOrAttribute, typename T_Attribute>
-    void addAttribute(uint32_t binding, uint32_t location, uint32_t offset=0);
+    void addAttribute(uint32_t binding, uint32_t location, uint32_t offset=0, uint32_t stride=0);
 
     VkPipelineVertexInputStateCreateInfo getPipelineVertexInputStateCreateInfo() const;
 
@@ -40,20 +40,23 @@ private:
 
 
 template <typename T_VertexOrAttribute>
-void VertexAttributesDescription::addBinding(uint32_t binding)
+void VertexAttributesDescription::addBinding(uint32_t binding, uint32_t stride)
 {
+    if (stride == 0)
+        stride = sizeof(T_VertexOrAttribute);
+
     for (auto& bindingDecription : _bindingDecriptions) {
         // Try to find existing bindingDecription with the specified binding and update it in case one was
         // found
         if (bindingDecription.binding == binding) {
-            bindingDecription.stride = sizeof(T_VertexOrAttribute);
+            bindingDecription.stride = stride;
             bindingDecription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
             return;
         }
     }
 
     // No existing bindingDecription with the binding found, create a new one
-    _bindingDecriptions.emplace_back(binding, sizeof(T_VertexOrAttribute), VK_VERTEX_INPUT_RATE_VERTEX);
+    _bindingDecriptions.emplace_back(binding, stride, VK_VERTEX_INPUT_RATE_VERTEX);
 
     // Keep the vector sorted for easy comparison with other VertexAttributesDescription objects
     std::sort(_bindingDecriptions.begin(), _bindingDecriptions.end(),
@@ -63,9 +66,9 @@ void VertexAttributesDescription::addBinding(uint32_t binding)
 }
 
 template <typename T_Vertex, typename T_Attribute>
-void VertexAttributesDescription::addAttribute(uint32_t binding, uint32_t location, uint32_t offset)
+void VertexAttributesDescription::addAttribute(uint32_t binding, uint32_t location, uint32_t offset, uint32_t stride)
 {
-    addBinding<T_Vertex>(binding);
+    addBinding<T_Vertex>(binding, stride);
 
     for (auto& attributeDescription: _attributeDecriptions) {
         // Try to find existing attributeDescription with the specified binding and location and update it

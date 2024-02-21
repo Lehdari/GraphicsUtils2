@@ -253,9 +253,9 @@ public:
         _texture = std::make_unique<gu2::Texture>(_vulkanPhysicalDevice, _vulkanDevice, _pipeline->getCommandPool(),
             _vulkanGraphicsQueue, gu2::Path(ASSETS_DIR) / "textures/box.png");
         _mesh = std::make_unique<gu2::Mesh>(_vulkanSettings, _vulkanPhysicalDevice, _vulkanDevice);
-        _mesh->addVertexAttribute(0, _vertexPositionData.data());
-        _mesh->addVertexAttribute(1, _vertexColorData.data());
-        _mesh->addVertexAttribute(2, _vertexTexCoordData.data());
+        _mesh->addVertexAttribute(0, _vertexPositionData.data(), _vertexPositionData.size());
+        _mesh->addVertexAttribute(1, _vertexColorData.data(), _vertexColorData.size());
+        _mesh->addVertexAttribute(2, _vertexTexCoordData.data(), _vertexTexCoordData.size());
         _mesh->setIndices(_indexData.data(), _indexData.size());
         _mesh->upload(_pipeline->getCommandPool(), _vulkanGraphicsQueue);
 
