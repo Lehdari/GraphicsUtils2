@@ -153,6 +153,14 @@ void Mesh::setIndices(const T_Index* data, uint32_t nIndices, uint32_t stride)
 
     _nIndices = nIndices;
     _vertexBufferInfos.emplace_back(0, data, sizeof(T_Index), _nIndices, VertexBufferInfo::INDEX);
+
+    // TODO temp, check the max index
+    T_Index maxIndex = 0;
+    for (int i=0; i<nIndices; ++i) {
+        if (data[i] > maxIndex)
+            maxIndex = data[i];
+    }
+    printf("maxIndex: %u\n", maxIndex);
 }
 
 
