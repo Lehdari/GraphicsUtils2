@@ -30,6 +30,7 @@ struct UniformBufferObject {
 
 
 class Texture;
+class Scene;
 class VulkanSettings;
 
 
@@ -40,8 +41,7 @@ public:
         VkPhysicalDevice physicalDevice,
         VkDevice device,
         VkSurfaceKHR surface,
-        WindowObject* window,
-        uint32_t nUniforms
+        WindowObject* window
     );
     Pipeline(const Pipeline& pipeline) = delete;
     Pipeline(Pipeline&& pipeline) = delete;
@@ -50,7 +50,7 @@ public:
     ~Pipeline();
 
     void createDescriptorSetLayout();
-    void createDescriptorPool();
+    void createDescriptorPool(uint32_t nUniforms);
     void createDescriptorSets(const Texture& texture);
 
     void createImageViews();
@@ -79,8 +79,8 @@ public:
     void framebufferResized();
 
     // TODO subject to relocation
-    void createUniformBuffers();
-    void updateUniformBuffer(VkExtent2D swapChainExtent, uint32_t currentFrame);
+    void createUniformBuffers(uint32_t nUniforms);
+    void updateUniformBuffer(const Scene& scene);
 
     friend class Mesh;
 
@@ -92,7 +92,6 @@ private:
     VkDevice                        _device;
     VkSurfaceKHR                    _surface;
     WindowObject*                   _window;
-    uint32_t                        _nUniforms;
 
     VkImage                         _depthImage;
     VkDeviceMemory                  _depthImageMemory;

@@ -19,6 +19,7 @@
 #include <gu2_vulkan/Pipeline.hpp>
 #include <gu2_vulkan/Texture.hpp>
 #include <gu2_vulkan/QueryWrapper.hpp>
+#include <gu2_vulkan/Scene.hpp>
 #include <gu2_vulkan/Util.hpp>
 #include <gu2_vulkan/VulkanSettings.hpp>
 
@@ -129,92 +130,7 @@ public:
     VulkanWindow(const gu2::WindowSettings& windowSettings, const gu2::VulkanSettings& vulkanSettings) :
         Window<VulkanWindow>    (windowSettings),
         _vulkanSettings         (vulkanSettings),
-        _vulkanPhysicalDevice   (VK_NULL_HANDLE),
-        _vertexPositionData     {
-                                    {-1.0f, -1.0f, -1.0f},
-                                    {1.0f, -1.0f, -1.0f},
-                                    {-1.0f, -1.0f, 1.0f},
-                                    {1.0f, -1.0f, 1.0f},
-                                    {1.0f, -1.0f, -1.0f},
-                                    {1.0f, 1.0f, -1.0f},
-                                    {1.0f, -1.0f, 1.0f},
-                                    {1.0f, 1.0f, 1.0f},
-                                    {1.0f, 1.0f, -1.0f},
-                                    {-1.0f, 1.0f, -1.0f},
-                                    {1.0f, 1.0f, 1.0f},
-                                    {-1.0f, 1.0f, 1.0f},
-                                    {-1.0f, 1.0f, -1.0f},
-                                    {-1.0f, -1.0f, -1.0f},
-                                    {-1.0f, 1.0f, 1.0f},
-                                    {-1.0f, -1.0f, 1.0f},
-                                    {-1.0f, -1.0f, 1.0f},
-                                    {1.0f, -1.0f, 1.0f},
-                                    {-1.0f, 1.0f, 1.0f},
-                                    {1.0f, 1.0f, 1.0f},
-                                    {1.0f, -1.0f, -1.0f},
-                                    {-1.0f, -1.0f, -1.0f},
-                                    {1.0f, 1.0f, -1.0f},
-                                    {-1.0f, 1.0f, -1.0f}
-                                },
-        _vertexColorData        {
-                                    {0.0f, 0.0f, 0.0f},
-                                    {1.0f, 0.0f, 0.0f},
-                                    {0.0f, 0.0f, 1.0f},
-                                    {1.0f, 0.0f, 1.0f},
-                                    {1.0f, 0.0f, 0.0f},
-                                    {1.0f, 1.0f, 0.0f},
-                                    {1.0f, 0.0f, 1.0f},
-                                    {1.0f, 1.0f, 1.0f},
-                                    {1.0f, 1.0f, 0.0f},
-                                    {0.0f, 1.0f, 0.0f},
-                                    {1.0f, 1.0f, 1.0f},
-                                    {0.0f, 1.0f, 1.0f},
-                                    {0.0f, 1.0f, 0.0f},
-                                    {0.0f, 0.0f, 0.0f},
-                                    {0.0f, 1.0f, 1.0f},
-                                    {0.0f, 0.0f, 1.0f},
-                                    {0.0f, 0.0f, 1.0f},
-                                    {1.0f, 0.0f, 1.0f},
-                                    {0.0f, 1.0f, 1.0f},
-                                    {1.0f, 1.0f, 1.0f},
-                                    {1.0f, 0.0f, 0.0f},
-                                    {0.0f, 0.0f, 0.0f},
-                                    {1.0f, 1.0f, 0.0f},
-                                    {0.0f, 1.0f, 0.0f}
-                                },
-        _vertexTexCoordData     {
-                                    {0.0f, 0.0f},
-                                    {0.0f, 0.25f},
-                                    {0.25f, 0.0f},
-                                    {0.25f, 0.25f},
-                                    {0.5f, 0.0f},
-                                    {0.5f, 0.25f},
-                                    {0.75f, 0.0f},
-                                    {0.75f, 0.25f},
-                                    {0.75f, 0.25f},
-                                    {0.75f, 0.5f},
-                                    {1.0f, 0.25f},
-                                    {1.0f, 0.5f},
-                                    {0.25f, 0.75f},
-                                    {0.25f, 1.0f},
-                                    {0.5f, 0.75f},
-                                    {0.5f, 1.0f},
-                                    {0.75f, 0.75f},
-                                    {0.75f, 1.0f},
-                                    {1.0f, 0.75f},
-                                    {1.0f, 1.0f},
-                                    {0.0f, 0.5f},
-                                    {0.0f, 0.75f},
-                                    {0.25f, 0.5f},
-                                    {0.25f, 0.75f}
-                                },
-        _indexData              {0, 1, 3, 0, 3, 2,
-                                 4, 5, 7, 4, 7, 6,
-                                 8, 9, 11, 8, 11, 10,
-                                 12, 13, 15, 12, 15, 14,
-                                 16, 17, 19, 16, 19, 18,
-                                 20, 21, 23, 20, 23, 22},
-        _nBoxes                 {3}
+        _vulkanPhysicalDevice   (VK_NULL_HANDLE)
     {
         initVulkan();
     }
@@ -223,7 +139,6 @@ public:
     {
         // Wait for the Vulkan device to finish its tasks
         vkDeviceWaitIdle(_vulkanDevice);
-        _mesh.reset();
         _meshes.clear();
         _texture.reset();
         _pipeline.reset();
@@ -245,26 +160,23 @@ public:
         selectPhysicalDevice();
         createLogicalDevice();
         _pipeline = std::make_unique<gu2::Pipeline>(_vulkanSettings, _vulkanPhysicalDevice, _vulkanDevice,
-            _vulkanSurface, &_window, _nBoxes);
+            _vulkanSurface, &_window);
         _pipeline->createSwapChain();
         _pipeline->createImageViews();
         _pipeline->createRenderPass();
         _pipeline->createCommandPool();
         _texture = std::make_unique<gu2::Texture>(_vulkanPhysicalDevice, _vulkanDevice, _pipeline->getCommandPool(),
             _vulkanGraphicsQueue, gu2::Path(ASSETS_DIR) / "textures/box.png");
-        _mesh = std::make_unique<gu2::Mesh>(_vulkanSettings, _vulkanPhysicalDevice, _vulkanDevice);
-        _mesh->addVertexAttribute(0, _vertexPositionData.data(), _vertexPositionData.size());
-        _mesh->addVertexAttribute(1, _vertexColorData.data(), _vertexColorData.size());
-        _mesh->addVertexAttribute(2, _vertexTexCoordData.data(), _vertexTexCoordData.size());
-        _mesh->setIndices(_indexData.data(), _indexData.size());
-        _mesh->upload(_pipeline->getCommandPool(), _vulkanGraphicsQueue);
 
         // Load sponza (TODO move elsewhere)
         gu2::GLTFLoader sponzaLoader;
         sponzaLoader.readFromFile(gu2::Path(ASSETS_DIR) / "sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");
         gu2::Mesh::createMeshesFromGLTF(sponzaLoader, &_meshes,
             _vulkanSettings, _vulkanPhysicalDevice, _vulkanDevice, _pipeline->getCommandPool(), _vulkanGraphicsQueue);
+        _scene.createFromGLFT(sponzaLoader, _meshes);
 
+        _pipeline->createUniformBuffers(_scene.nodes.size());
+        _pipeline->createDescriptorPool(_scene.nodes.size());
         _pipeline->createDescriptorSetLayout();
 
         // Shaders
@@ -498,9 +410,10 @@ public:
 //            _mesh->draw(commandBuffer, *_pipeline, _pipeline->getCurrentFrame(), boxId);
 //        }
 
-        for (int i=0; i<3; ++i) {
-            _meshes[i].bind(commandBuffer);
-            _meshes[i].draw(commandBuffer, *_pipeline, _pipeline->getCurrentFrame(), i);
+        for (size_t nodeId=0; nodeId<_scene.nodes.size(); ++nodeId) {
+            const auto& node = _scene.nodes[nodeId];
+            node.mesh->bind(commandBuffer);
+            node.mesh->draw(commandBuffer, *_pipeline, _pipeline->getCurrentFrame(), nodeId);
         }
 
         vkCmdEndRenderPass(commandBuffer);
@@ -540,6 +453,7 @@ public:
         if (!_pipeline->beginRender(_vulkanGraphicsQueue, &commandBuffer, &imageIndex))
             return; // swap chain got resized
         recordCommandBuffer(commandBuffer, imageIndex);
+        _pipeline->updateUniformBuffer(_scene);
         _pipeline->endRender(_vulkanGraphicsQueue, _vulkanPresentQueue, imageIndex);
     }
 
@@ -557,21 +471,15 @@ private:
 
     std::unique_ptr<gu2::Pipeline>  _pipeline;
     std::unique_ptr<gu2::Texture>   _texture;
-    std::unique_ptr<gu2::Mesh>      _mesh;
     std::vector<gu2::Mesh>          _meshes;
-
-    std::vector<gu2::Vec3f>         _vertexPositionData;
-    std::vector<gu2::Vec3f>         _vertexColorData;
-    std::vector<gu2::Vec2f>         _vertexTexCoordData;
-    std::vector<uint16_t>           _indexData;
-    uint32_t                        _nBoxes;
+    gu2::Scene                      _scene;
 };
 
 
 int main(void)
 {
     gu2::WindowSettings windowSettings;
-    windowSettings.name = "Hello Vulkan Box!";
+    windowSettings.name = "Hello Vulkan Sponza!";
     windowSettings.w = 800;
     windowSettings.h = 600;
 

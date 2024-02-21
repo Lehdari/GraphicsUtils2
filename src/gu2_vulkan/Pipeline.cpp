@@ -9,6 +9,7 @@
 //
 
 #include "Pipeline.hpp"
+#include "Scene.hpp"
 #include "Texture.hpp"
 #include "Util.hpp"
 #include "VulkanSettings.hpp"
@@ -25,8 +26,7 @@ Pipeline::Pipeline(
     VkPhysicalDevice physicalDevice,
     VkDevice device,
     VkSurfaceKHR surface,
-    WindowObject* window,
-    uint32_t nUniforms
+    WindowObject* window
 ) :
     _vulkanSettings     (&vulkanSettings),
     _physicalDevice     (physicalDevice),
@@ -34,14 +34,10 @@ Pipeline::Pipeline(
     _surface            (surface),
     _window             (window),
     _framebufferResized (false),
-    _currentFrame       (0),
-    _nUniforms          (nUniforms)
+    _currentFrame       (0)
 {
     // Store the device properties in local struct
     vkGetPhysicalDeviceProperties(_physicalDevice, &_physicalDeviceProperties);
-
-    createUniformBuffers();
-    createDescriptorPool();
 }
 
 Pipeline::~Pipeline()
@@ -92,11 +88,11 @@ void Pipeline::createDescriptorSetLayout()
     }
 }
 
-void Pipeline::createDescriptorPool()
+void Pipeline::createDescriptorPool(uint32_t nUniforms)
 {
     std::array<VkDescriptorPoolSize, 2> poolSizes{};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    poolSizes[0].descriptorCount = static_cast<uint32_t>(_vulkanSettings->framesInFlight * _nUniforms);
+    poolSizes[0].descriptorCount = static_cast<uint32_t>(_vulkanSettings->framesInFlight * nUniforms);
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     poolSizes[1].descriptorCount = static_cast<uint32_t>(_vulkanSettings->framesInFlight);
 
@@ -622,8 +618,6 @@ bool Pipeline::beginRender(VkQueue graphicsQueue, VkCommandBuffer* commandBuffer
 
 void Pipeline::endRender(VkQueue graphicsQueue, VkQueue presentQueue, uint32_t imageIndex)
 {
-    updateUniformBuffer(_swapChainExtent, _currentFrame); // TODO move
-
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -669,9 +663,9 @@ void Pipeline::framebufferResized()
     _framebufferResized = true;
 }
 
-void Pipeline::createUniformBuffers()
+void Pipeline::createUniformBuffers(uint32_t nUniforms)
 {
-    VkDeviceSize bufferSize = padUniformBufferSize(_physicalDeviceProperties, sizeof(UniformBufferObject)) * _nUniforms;
+    VkDeviceSize bufferSize = padUniformBufferSize(_physicalDeviceProperties, sizeof(UniformBufferObject)) * nUniforms;
 
     _uniformBuffers.resize(_vulkanSettings->framesInFlight);
     _uniformBuffersMemory.resize(_vulkanSettings->framesInFlight);
@@ -686,27 +680,29 @@ void Pipeline::createUniformBuffers()
     }
 }
 
-void Pipeline::updateUniformBuffer(VkExtent2D swapChainExtent, uint32_t currentFrame)
+void Pipeline::updateUniformBuffer(const Scene& scene)
 {
     static auto startTime = std::chrono::high_resolution_clock::now();
     auto currentTime = std::chrono::high_resolution_clock::now();
     double time = std::chrono::duration<double, std::chrono::seconds::period>(currentTime - startTime).count();
 
-    for (int boxId=0; boxId<_nUniforms; ++boxId) {
+    int uniformId = 0;
+    for (const auto& node : scene.nodes) {
         gu2::UniformBufferObject ubo;
         // Model matrix
-        double boxPosAngle = boxId / (double)_nUniforms;
-        gu2::Vec3f modelPos(std::cos(boxPosAngle*2.0*M_PI + 0.25*time), 0.0f, std::sin(boxPosAngle*2.0*M_PI + 0.25*time));
-        modelPos *= 2.0f;
-        ubo.model <<
-                  (Eigen::AngleAxisf(0.25*M_PI*time, gu2::Vec3f::UnitX())
-                      * Eigen::AngleAxisf(0.5*M_PI*time, gu2::Vec3f::UnitY())
-                      * Eigen::AngleAxisf(0.33*M_PI*time, gu2::Vec3f::UnitZ())).toRotationMatrix(),
-            modelPos, gu2::Vec3f::Zero().transpose(), 1.0f;
+//        double boxPosAngle = uniformId / (double)_nUniforms;
+//        gu2::Vec3f modelPos(std::cos(boxPosAngle*2.0*M_PI + 0.25*time), 0.0f, std::sin(boxPosAngle*2.0*M_PI + 0.25*time));
+//        modelPos *= 2.0f;
+//        ubo.model <<
+//                  (Eigen::AngleAxisf(0.25*M_PI*time, gu2::Vec3f::UnitX())
+//                      * Eigen::AngleAxisf(0.5*M_PI*time, gu2::Vec3f::UnitY())
+//                      * Eigen::AngleAxisf(0.33*M_PI*time, gu2::Vec3f::UnitZ())).toRotationMatrix(),
+//            modelPos, gu2::Vec3f::Zero().transpose(), 1.0f;
+        ubo.model = node.transformation;
 
         // View matrix
         gu2::Vec3f target(0.0f, 0.0f, 0.0f);
-        gu2::Vec3f source(1.0f, 3.0f, 5.0f);
+        gu2::Vec3f source(10.0f*cosf(0.1*time), 3.0f, 10.0f*sinf(0.1*time));
         gu2::Vec3f up(0.0f, 1.0f, 0.0f);
 
         gu2::Vec3f forward = (target-source).normalized();
@@ -722,7 +718,7 @@ void Pipeline::updateUniformBuffer(VkExtent2D swapChainExtent, uint32_t currentF
         float near = 0.1f;
         float far = 10.0f;
         float fov = M_PI/3.0; // 60 degrees
-        float aspectRatio = swapChainExtent.width / (float) swapChainExtent.height;
+        float aspectRatio = _swapChainExtent.width / (float) _swapChainExtent.height;
         float r = tanf(fov / 2.0f);
 
         // Traditional projection matrix
@@ -739,7 +735,9 @@ void Pipeline::updateUniformBuffer(VkExtent2D swapChainExtent, uint32_t currentF
             0.0f,                   0.0f,       0.0f,   near,
             0.0f,                   0.0f,       1.0f,   0.0f;
 
-        memcpy(reinterpret_cast<uint8_t*>(_uniformBuffersMapped[currentFrame]) +
-            padUniformBufferSize(_physicalDeviceProperties, sizeof(ubo))*boxId, &ubo, sizeof(ubo));
+        memcpy(reinterpret_cast<uint8_t*>(_uniformBuffersMapped[_currentFrame]) +
+            padUniformBufferSize(_physicalDeviceProperties, sizeof(ubo))*uniformId, &ubo, sizeof(ubo));
+
+        ++uniformId;
     }
 }
