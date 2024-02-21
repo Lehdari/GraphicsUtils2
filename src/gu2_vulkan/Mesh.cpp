@@ -52,7 +52,6 @@ void Mesh::createMeshesFromGLTF(
             printf("==============\n");
             // Add vertex attributes
             for (const auto& attribute : p.attributes) {
-                printf("%s\n", attribute.name.c_str());
                 if (attribute.accessorId < 0)
                     throw std::runtime_error("No accessor ID for attribute \"" + attribute.name + "\" defined");
                 auto& accessor = gltfLoader.getAccessors().at(attribute.accessorId);
@@ -65,11 +64,15 @@ void Mesh::createMeshesFromGLTF(
                 if (buffer.buffer == nullptr)
                     throw std::runtime_error("No buffer loaded");
 
+                printf("%s %ld %ld\n", attribute.name.c_str(), attribute.accessorId, accessor.bufferView);
+
                 if (attribute.name == "POSITION") {
                     if (accessor.componentType == GLTFLoader::Accessor::ComponentType::FLOAT &&
                         accessor.type == "VEC3") {
-                        printf("Adding position, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
-                        mesh.addVertexAttribute(0, reinterpret_cast<Vec3f*>(buffer.buffer + bufferView.byteOffset),
+                        printf("Adding POSITION, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
+                        printf("Offset: %lu\n", bufferView.byteOffset + accessor.byteOffset);
+                        mesh.addVertexAttribute(0,
+                            reinterpret_cast<Vec3f*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
                             accessor.count, bufferView.byteStride);
                     }
                     else
@@ -97,11 +100,13 @@ void Mesh::createMeshesFromGLTF(
                 printf("Adding indices, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
                 switch (accessor.componentType) {
                     case GLTFLoader::Accessor::ComponentType::UNSIGNED_SHORT:
-                        mesh.setIndices(reinterpret_cast<uint16_t*>(buffer.buffer + bufferView.byteOffset),
+                        mesh.setIndices(
+                            reinterpret_cast<uint16_t*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
                             accessor.count, bufferView.byteStride);
                         break;
                     case GLTFLoader::Accessor::ComponentType::UNSIGNED_INT:
-                        mesh.setIndices(reinterpret_cast<uint32_t*>(buffer.buffer + bufferView.byteOffset),
+                        mesh.setIndices(
+                            reinterpret_cast<uint32_t*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
                             accessor.count, bufferView.byteStride);
                         break;
                     default:

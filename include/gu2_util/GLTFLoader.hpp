@@ -84,6 +84,7 @@ public:
         };
 
         int64_t         bufferView      {-1};
+        uint64_t        byteOffset      {0};
         ComponentType   componentType   {ComponentType::BYTE};
         uint64_t        count           {0};
         std::string     type;

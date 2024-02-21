@@ -203,6 +203,9 @@ void GLTFLoader::readFromFile(const Path& filename)
 
             if (accessor.contains("bufferView"))
                 a.bufferView = accessor["bufferView"];
+
+            if (accessor.contains("byteOffset"))
+                a.byteOffset = accessor["byteOffset"];
         }
         printf("Parsed %lu accessors.\n", _accessors.size());
     }
