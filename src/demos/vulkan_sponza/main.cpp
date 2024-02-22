@@ -180,8 +180,8 @@ public:
         _pipeline->createDescriptorSetLayout();
 
         // Shaders
-        auto vertShaderCode = readFile("../shader/spir-v/vertex_simple.spv");
-        auto fragShaderCode = readFile("../shader/spir-v/fragment_simple.spv");
+        auto vertShaderCode = readFile("../shader/spir-v/vertex_pbr.spv");
+        auto fragShaderCode = readFile("../shader/spir-v/fragment_pbr.spv");
 
         _pipeline->createGraphicsPipeline(
             createShaderModule(vertShaderCode),
@@ -403,12 +403,6 @@ public:
         }
 
         _pipeline->recordRenderPassCommands(commandBuffer, imageIndex);
-
-//        _mesh->bind(commandBuffer);
-//
-//        for (uint32_t boxId=0; boxId<_nBoxes; ++boxId) {
-//            _mesh->draw(commandBuffer, *_pipeline, _pipeline->getCurrentFrame(), boxId);
-//        }
 
         for (size_t nodeId=0; nodeId<_scene.nodes.size(); ++nodeId) {
             const auto& node = _scene.nodes[nodeId];
