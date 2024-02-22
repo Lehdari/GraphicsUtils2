@@ -70,13 +70,23 @@ void Mesh::createMeshesFromGLTF(
                     if (accessor.componentType == GLTFLoader::Accessor::ComponentType::FLOAT &&
                         accessor.type == "VEC3") {
                         printf("Adding POSITION, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
-                        printf("Offset: %lu\n", bufferView.byteOffset + accessor.byteOffset);
                         mesh.addVertexAttribute(0,
                             reinterpret_cast<Vec3f*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
                             accessor.count, bufferView.byteStride);
                     }
                     else
                         throw std::runtime_error("Unsupported attribute format for \"POSITION\"");
+                }
+                else if (attribute.name == "NORMAL") {
+                    if (accessor.componentType == GLTFLoader::Accessor::ComponentType::FLOAT &&
+                        accessor.type == "VEC3") {
+                        printf("Adding NORMAL, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
+                        mesh.addVertexAttribute(1,
+                            reinterpret_cast<Vec3f*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
+                            accessor.count, bufferView.byteStride);
+                    }
+                    else
+                        throw std::runtime_error("Unsupported attribute format for \"NORMAL\"");
                 }
             }
 
@@ -144,16 +154,26 @@ Mesh::~Mesh()
 
 void Mesh::upload(VkCommandPool commandPool, VkQueue queue)
 {
+    // Sanity check that we have as many VertexBufferInfos as the biggest location indicates
+    uint32_t maxLocation = 0;
+    for (const auto& bufferInfo : _vertexBufferInfos) {
+        if (bufferInfo.location > maxLocation)
+            maxLocation = bufferInfo.location;
+    }
+    if (maxLocation+1 != _vertexBufferInfos.size()-1) // one VertexBufferInfo is for indices
+        throw std::runtime_error("The number of buffer infos does not match the vertex attribute locations provided");
+
+    _vertexAttributeBuffers.resize(maxLocation+1);
+    _vertexBufferMemories.resize(maxLocation+1);
+
     for (const auto& bufferInfo : _vertexBufferInfos) {
         VkBufferUsageFlagBits bufferType = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
         VkBuffer* buffer = &_indexBuffer;
         VkDeviceMemory* memory = &_indexBufferMemory;
         if (bufferInfo.type == VertexBufferInfo::ATTRIBUTE) {
-            _vertexAttributeBuffers.emplace_back();
-            _vertexBufferMemories.emplace_back();
             bufferType = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-            buffer = &_vertexAttributeBuffers.back();
-            memory = &_vertexBufferMemories.back();
+            buffer = &_vertexAttributeBuffers[bufferInfo.location];
+            memory = &_vertexBufferMemories[bufferInfo.location];
         }
 
         VkDeviceSize bufferSize = bufferInfo.elementSize * bufferInfo.nElements;
