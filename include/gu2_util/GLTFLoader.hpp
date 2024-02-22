@@ -46,6 +46,7 @@ public:
                 int64_t     accessorId;
             };
 
+            int64_t                 id          {-1}; // id in the flattened primitive vector
             Mode                    mode        {Mode::TRIANGLES};
             int64_t                 indices     {-1};
             std::vector<Attribute>  attributes;

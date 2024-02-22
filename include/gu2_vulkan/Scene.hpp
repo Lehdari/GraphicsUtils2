@@ -37,6 +37,7 @@ private:
         Mat4d transformation,
         const GLTFLoader::Node& gltfNode,
         const std::vector<GLTFLoader::Node>& gltfNodes,
+        const std::vector<GLTFLoader::Mesh>& gltfMeshes,
         std::vector<Mesh>& meshes);
 };
 

@@ -93,6 +93,7 @@ void GLTFLoader::readFromFile(const Path& filename)
     // Parse meshes
     if (_gltfJson.contains("meshes")) {
         const auto& meshes = _gltfJson["meshes"];
+        int64_t primitiveId = 0;
         _meshes.clear();
         _meshes.reserve(meshes.size());
         for (const auto& mesh : meshes) {
@@ -108,6 +109,7 @@ void GLTFLoader::readFromFile(const Path& filename)
 
                 m.primitives.emplace_back();
                 auto& p = m.primitives.back();
+                p.id = primitiveId++;
 
                 for (const auto& [name, accessorId] : primitive["attributes"].items()) {
                     p.attributes.emplace_back(name, accessorId);
