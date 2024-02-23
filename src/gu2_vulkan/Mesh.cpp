@@ -88,6 +88,30 @@ void Mesh::createMeshesFromGLTF(
                     else
                         throw std::runtime_error("Unsupported attribute format for \"NORMAL\"");
                 }
+                else if (attribute.name == "TANGENT") {
+                    if (accessor.componentType == GLTFLoader::Accessor::ComponentType::FLOAT &&
+                        accessor.type == "VEC4") {
+                        printf("Adding TANGENT, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
+                        mesh.addVertexAttribute(2,
+                            reinterpret_cast<Vec4f*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
+                            accessor.count, bufferView.byteStride);
+                    }
+                    else
+                        throw std::runtime_error("Unsupported attribute format for \"TANGENT\"");
+                }
+                else if (attribute.name.substr(0, 9) == "TEXCOORD_") {
+                    int texCoordId = std::stoi(attribute.name.substr(9, 1));
+                    if (accessor.componentType == GLTFLoader::Accessor::ComponentType::FLOAT &&
+                        accessor.type == "VEC2") {
+                        printf("Adding %s, count: %lu stride: %lu\n", attribute.name.c_str(), accessor.count,
+                            bufferView.byteStride);
+                        mesh.addVertexAttribute(3+texCoordId,
+                            reinterpret_cast<Vec2f*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
+                            accessor.count, bufferView.byteStride);
+                    }
+                    else
+                        throw std::runtime_error("Unsupported attribute format for \"TEXCOORD\"");
+                }
             }
 
             // Add indices

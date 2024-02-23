@@ -559,6 +559,7 @@ inline VulkanSwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice phys
 template <typename T_Matrix> struct AttributeFormat_Impl {};
 template <> struct AttributeFormat_Impl<Vec2f> { static constexpr VkFormat format {VK_FORMAT_R32G32_SFLOAT}; };
 template <> struct AttributeFormat_Impl<Vec3f> { static constexpr VkFormat format {VK_FORMAT_R32G32B32_SFLOAT}; };
+template <> struct AttributeFormat_Impl<Vec4f> { static constexpr VkFormat format {VK_FORMAT_R32G32B32A32_SFLOAT}; };
 // alias for streamlined usage, example: AttributeFormat<Vec3f>
 template <typename T_Matrix>
 inline constexpr VkFormat AttributeFormat = AttributeFormat_Impl<T_Matrix>::format;
