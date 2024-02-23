@@ -701,8 +701,9 @@ void Pipeline::updateUniformBuffer(const Scene& scene)
         ubo.model = node.transformation;
 
         // View matrix
-        gu2::Vec3f target(0.0f, 2.5f, 0.0f);
-        gu2::Vec3f source(5.0f*cosf(0.1*time), 1.5f, 5.0f*sinf(0.1*time));
+        double tScale = 0.1;
+        gu2::Vec3f target(-20.0f*sin((tScale/5.0)*time), 2.5f-2.5f*cos(0.87354*tScale*time), 8.0f*cos((tScale/3.0)*time));
+        gu2::Vec3f source(10.0f*cos((tScale/2.0)*time), 1.5f+1.0f*cos(0.34786*tScale*time), 5.8f*sin(tScale*time));
         gu2::Vec3f up(0.0f, 1.0f, 0.0f);
 
         gu2::Vec3f forward = (target-source).normalized();
