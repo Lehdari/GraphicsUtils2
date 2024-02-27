@@ -9,7 +9,10 @@
 //
 
 #include "Mesh.hpp"
+#include "Material.hpp"
 #include "Pipeline.hpp"
+#include "Renderer.hpp"
+#include "Scene.hpp"
 #include "Texture.hpp"
 #include "Util.hpp"
 #include "gu2_util/GLTFLoader.hpp"
@@ -20,26 +23,37 @@
 using namespace gu2;
 
 
+std::vector<VkDescriptorSet>    Mesh::_descriptorSets;
+
+VkDescriptorSetLayout           Mesh::_descriptorSetLayout;
+VkDescriptorPool                Mesh::_descriptorPool;
+
+std::vector<VkBuffer>           Mesh::_uniformBuffers;
+std::vector<VkDeviceMemory>     Mesh::_uniformBuffersMemory;
+std::vector<void*>              Mesh::_uniformBuffersMapped;
+
+
 void Mesh::createMeshesFromGLTF(
     const GLTFLoader& gltfLoader,
     std::vector<Mesh>* meshes,
+    const std::vector<Material>& materials,
     const VulkanSettings& vulkanSettings,
     VkPhysicalDevice physicalDevice,
     VkDevice device,
     VkCommandPool commandPool,
     VkQueue queue
 ) {
-    auto& loaderMeshes = gltfLoader.getMeshes();
+    auto& gltfMeshes = gltfLoader.getMeshes();
 
     // Count the number of primitives (one gu2::Mesh corresponds to a single GLTF mesh primitive, not mesh)
     size_t nPrimitives = 0;
-    for (const auto& m : loaderMeshes)
+    for (const auto& m : gltfMeshes)
         nPrimitives += m.primitives.size();
 
     meshes->clear();
     meshes->reserve(nPrimitives);
 
-    for (const auto& m : loaderMeshes) {
+    for (const auto& m : gltfMeshes) {
         for (const auto& p : m.primitives) {
             meshes->emplace_back(vulkanSettings, physicalDevice, device);
             auto& mesh = meshes->back();
@@ -149,6 +163,10 @@ void Mesh::createMeshesFromGLTF(
             }
 
             mesh.upload(commandPool, queue);
+            mesh.createDescriptorSets(device, vulkanSettings.framesInFlight);
+
+            if (p.material >= 0)
+                mesh.setMaterial(&materials.at(p.material));
         }
     }
 }
@@ -160,7 +178,9 @@ Mesh::Mesh(
     VkDevice device
 ) :
     _physicalDevice (physicalDevice),
-    _device         (device)
+    _device         (device),
+    _nIndices       (0),
+    _material       (nullptr)
 {
     // Store the device properties in local struct
     vkGetPhysicalDeviceProperties(_physicalDevice, &_physicalDeviceProperties);
@@ -223,12 +243,100 @@ void Mesh::upload(VkCommandPool commandPool, VkQueue queue)
     }
 }
 
+void Mesh::createDescriptorSets(VkDevice device, int framesInFlight)
+{
+    // Allocate descriptor set layout in case it does not exist
+    if (_descriptorSetLayout == nullptr) {
+        VkDescriptorSetLayoutBinding uboLayoutBinding{};
+        uboLayoutBinding.binding = 0;
+        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        uboLayoutBinding.descriptorCount = 1;
+        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
+
+        std::array<VkDescriptorSetLayoutBinding, 1> bindings = {uboLayoutBinding};
+        VkDescriptorSetLayoutCreateInfo layoutInfo{};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+        layoutInfo.pBindings = bindings.data();
+
+        if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &_descriptorSetLayout) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create descriptor set layout!");
+        }
+    }
+
+    // Allocate descriptor pools
+    if (_descriptorPool == nullptr)
+        createDescriptorPool(device, framesInFlight);
+
+    // TODO vvvvvvvvvvvvvvvvv using static member for now, rethink mesh uniform storage
+    if (!_descriptorSets.empty())
+        return;
+
+    // Allocate uniform descriptor sets
+    std::vector<VkDescriptorSetLayout> uniformLayouts(framesInFlight, _descriptorSetLayout);
+    VkDescriptorSetAllocateInfo uniformAllocInfo{};
+    uniformAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    uniformAllocInfo.descriptorPool = _descriptorPool;
+    uniformAllocInfo.descriptorSetCount = static_cast<uint32_t>(framesInFlight);
+    uniformAllocInfo.pSetLayouts = uniformLayouts.data();
+    _descriptorSets.resize(framesInFlight);
+    if (vkAllocateDescriptorSets(device, &uniformAllocInfo, _descriptorSets.data()) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to allocate descriptor sets!");
+    }
+
+    for (size_t i = 0; i < framesInFlight; i++) {
+        VkDescriptorBufferInfo bufferInfo{};
+        bufferInfo.buffer = _uniformBuffers[i];
+        bufferInfo.offset = 0;
+        bufferInfo.range = sizeof(UniformBufferObject);
+
+        std::array<VkWriteDescriptorSet, 1> descriptorWrites{};
+
+        descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[0].dstSet = _descriptorSets[i];
+        descriptorWrites[0].dstBinding = 0;
+        descriptorWrites[0].dstArrayElement = 0;
+        descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        descriptorWrites[0].descriptorCount = 1;
+        descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+        vkUpdateDescriptorSets(_device, static_cast<uint32_t>(descriptorWrites.size()),
+            descriptorWrites.data(), 0, nullptr);
+    }
+}
+
+VkDescriptorSetLayout Mesh::getDescriptorSetLayout() const
+{
+    return _descriptorSetLayout;
+}
+
+void Mesh::setMaterial(const Material* material)
+{
+    _material = material;
+}
+
+const Material& Mesh::getMaterial() const
+{
+    return *_material;
+}
+
+void Mesh::setPipeline(const Pipeline* pipeline)
+{
+    _pipeline = pipeline;
+}
+
+const Pipeline& Mesh::getPipeline() const
+{
+    return *_pipeline;
+}
+
 const VertexAttributesDescription& Mesh::getVertexAttributesDescription() const
 {
     return _attributesDescription;
 }
 
-void Mesh::bind(VkCommandBuffer commandBuffer)
+void Mesh::bind(VkCommandBuffer commandBuffer) const
 {
     std::vector<VkDeviceSize> offsets(_vertexAttributeBuffers.size(), 0); // TODO don't generate this every bind
     vkCmdBindVertexBuffers(commandBuffer, 0, _vertexAttributeBuffers.size(), _vertexAttributeBuffers.data(),
@@ -238,12 +346,137 @@ void Mesh::bind(VkCommandBuffer commandBuffer)
 
 void Mesh::draw(
     VkCommandBuffer commandBuffer,
-    const Pipeline& pipeline,
     uint32_t currentFrame,
     uint32_t uniformId
 ) const {
+    if (_material != nullptr && _material->_textures.size() != 3) // TODO obviously subject to removal once shaders are quaranteed have matching number of textures
+        return;
+
     uint32_t offset = uniformId * padUniformBufferSize(_physicalDeviceProperties, sizeof(gu2::UniformBufferObject));
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline._pipelineLayout, 0, 1,
-        &(pipeline._descriptorSets[currentFrame]), 1, &offset);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline->_pipelineLayout, 1, 1,
+        &_descriptorSets[currentFrame], 1, &offset);
+
+    // Bind material
+    if (_material != nullptr)
+        _material->bind(commandBuffer, _pipeline->_pipelineLayout, currentFrame);
+
     vkCmdDrawIndexed(commandBuffer, _nIndices, 1, 0, 0, 0);
+}
+
+void Mesh::createDescriptorPool(VkDevice device, int framesInFlight)
+{
+    VkDescriptorPoolSize poolSize;
+    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    poolSize.descriptorCount = static_cast<uint32_t>(framesInFlight);
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &poolSize;
+    poolInfo.maxSets = static_cast<uint32_t>(framesInFlight);
+
+    if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &_descriptorPool) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create descriptor pool!");
+    }
+}
+
+void Mesh::destroyDescriptorResources(VkDevice device)
+{
+    vkDestroyDescriptorPool(device, _descriptorPool, nullptr);
+    vkDestroyDescriptorSetLayout(device, _descriptorSetLayout, nullptr);
+}
+
+void Mesh::createUniformBuffers(
+    VkPhysicalDevice physicalDevice,
+    VkDevice device,
+    int framesInFlight,
+    uint32_t nUniforms
+) {
+    VkPhysicalDeviceProperties physicalDeviceProperties;
+    vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
+    VkDeviceSize bufferSize = padUniformBufferSize(physicalDeviceProperties, sizeof(UniformBufferObject)) * nUniforms;
+
+    _uniformBuffers.resize(framesInFlight);
+    _uniformBuffersMemory.resize(framesInFlight);
+    _uniformBuffersMapped.resize(framesInFlight);
+
+    for (size_t i=0; i<framesInFlight; i++) {
+        createBuffer(physicalDevice, device, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, _uniformBuffers[i],
+            _uniformBuffersMemory[i]);
+
+        vkMapMemory(device, _uniformBuffersMemory[i], 0, bufferSize, 0, &_uniformBuffersMapped[i]);
+    }
+}
+
+void Mesh::updateUniformBuffer(const Scene& scene, const Renderer& renderer)
+{
+    static auto startTime = std::chrono::high_resolution_clock::now();
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    double time = std::chrono::duration<double, std::chrono::seconds::period>(currentTime - startTime).count();
+
+    int uniformId = 0;
+    for (const auto& node : scene.nodes) {
+        gu2::UniformBufferObject ubo;
+        // Model matrix
+//        double boxPosAngle = uniformId / (double)_nUniforms;
+//        gu2::Vec3f modelPos(std::cos(boxPosAngle*2.0*M_PI + 0.25*time), 0.0f, std::sin(boxPosAngle*2.0*M_PI + 0.25*time));
+//        modelPos *= 2.0f;
+//        ubo.model <<
+//                  (Eigen::AngleAxisf(0.25*M_PI*time, gu2::Vec3f::UnitX())
+//                      * Eigen::AngleAxisf(0.5*M_PI*time, gu2::Vec3f::UnitY())
+//                      * Eigen::AngleAxisf(0.33*M_PI*time, gu2::Vec3f::UnitZ())).toRotationMatrix(),
+//            modelPos, gu2::Vec3f::Zero().transpose(), 1.0f;
+        ubo.model = node.transformation;
+
+        // View matrix
+        double tScale = 0.1;
+        gu2::Vec3f target(-20.0f*sin((tScale/5.0)*time), 2.5f-2.5f*cos(0.87354*tScale*time), 8.0f*cos((tScale/3.0)*time));
+        gu2::Vec3f source(10.0f*cos((tScale/2.0)*time), 1.5f+1.0f*cos(0.34786*tScale*time), 5.8f*sin(tScale*time));
+        gu2::Vec3f up(0.0f, 1.0f, 0.0f);
+
+        gu2::Vec3f forward = (target-source).normalized();
+        gu2::Vec3f right = forward.cross(up).normalized();
+        gu2::Vec3f up2 = right.cross(forward).normalized();
+
+        gu2::Mat3f viewRotation;
+        viewRotation << right.transpose(), up2.transpose(), forward.transpose();
+        ubo.view << viewRotation, -viewRotation*source,
+            0.0f, 0.0f, 0.0f, 1.0f;
+
+        // Perspective matrix
+        float near = 0.1f;
+        float far = 10.0f;
+        float fov = M_PI/3.0; // 60 degrees
+        float aspectRatio = renderer.getSwapChainExtent().width / (float) renderer.getSwapChainExtent().height;
+        float r = tanf(fov / 2.0f);
+
+        // Traditional projection matrix
+//            ubo.projection <<
+//                1.0f/(aspectRatio * r), 0.0f,       0.0f,           0.0f,
+//                0.0f,                   -1.0f/r,    0.0f,           0.0f,
+//                0.0f,                   0.0f,       far/(far-near), -(far*near)/(far-near),
+//                0.0f,                   0.0f,       1.0f,           0.0f;
+
+        // Infinite far-plane, inverted depth projection matrix
+        ubo.projection <<
+                       1.0f/(aspectRatio * r), 0.0f,       0.0f,   0.0f,
+            0.0f,                   -1.0f/r,    0.0f,   0.0f,
+            0.0f,                   0.0f,       0.0f,   near,
+            0.0f,                   0.0f,       1.0f,   0.0f;
+
+        memcpy(reinterpret_cast<uint8_t*>(_uniformBuffersMapped[renderer.getCurrentFrame()]) +
+            padUniformBufferSize(renderer._physicalDeviceProperties, sizeof(ubo))*uniformId, &ubo, sizeof(ubo));
+
+        ++uniformId;
+    }
+}
+
+void Mesh::destroyUniformBuffers(VkDevice device)
+{
+    assert(_uniformBuffers.size() == _uniformBuffersMemory.size());
+    for (int i=0; i<_uniformBuffers.size(); ++i) {
+        vkDestroyBuffer(device, _uniformBuffers[i], nullptr);
+        vkFreeMemory(device, _uniformBuffersMemory[i], nullptr);
+    }
 }

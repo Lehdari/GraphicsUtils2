@@ -15,8 +15,10 @@
 #include <gu2_util/Image.hpp>
 #include <gu2_util/Typedef.hpp>
 #include <gu2_vulkan/backend.hpp>
+#include <gu2_vulkan/Material.hpp>
 #include <gu2_vulkan/Mesh.hpp>
 #include <gu2_vulkan/Pipeline.hpp>
+#include <gu2_vulkan/Renderer.hpp>
 #include <gu2_vulkan/Texture.hpp>
 #include <gu2_vulkan/QueryWrapper.hpp>
 #include <gu2_vulkan/Scene.hpp>
@@ -140,8 +142,13 @@ public:
         // Wait for the Vulkan device to finish its tasks
         vkDeviceWaitIdle(_vulkanDevice);
         _meshes.clear();
-        _texture.reset();
-        _pipeline.reset();
+        gu2::Mesh::destroyUniformBuffers(_vulkanDevice);
+        gu2::Mesh::destroyDescriptorResources(_vulkanDevice);
+        _materials.clear();
+        gu2::Material::destroyDescriptorResources(_vulkanDevice);
+        _textures.clear();
+        _pipelines.clear();
+        _renderer.reset();
         vkDestroyDevice(_vulkanDevice, nullptr);
         if (_vulkanSettings.enableValidationLayers)
             DestroyDebugUtilsMessengerEXT(_vulkanInstance, _vulkanDebugMessenger, nullptr);
@@ -159,41 +166,51 @@ public:
         createSurface();
         selectPhysicalDevice();
         createLogicalDevice();
-        _pipeline = std::make_unique<gu2::Pipeline>(_vulkanSettings, _vulkanPhysicalDevice, _vulkanDevice,
-            _vulkanSurface, &_window);
-        _pipeline->createSwapChain();
-        _pipeline->createImageViews();
-        _pipeline->createRenderPass();
-        _pipeline->createCommandPool();
-        _texture = std::make_unique<gu2::Texture>(_vulkanPhysicalDevice, _vulkanDevice, _pipeline->getCommandPool(),
-            _vulkanGraphicsQueue, gu2::Path(ASSETS_DIR) / "textures/box.png");
-
-        // Load sponza (TODO move elsewhere)
-        gu2::GLTFLoader sponzaLoader;
-        sponzaLoader.readFromFile(gu2::Path(ASSETS_DIR) / "sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");
-        gu2::Mesh::createMeshesFromGLTF(sponzaLoader, &_meshes,
-            _vulkanSettings, _vulkanPhysicalDevice, _vulkanDevice, _pipeline->getCommandPool(), _vulkanGraphicsQueue);
-        _scene.createFromGLFT(sponzaLoader, _meshes);
-
-        _pipeline->createUniformBuffers(_scene.nodes.size());
-        _pipeline->createDescriptorPool(_scene.nodes.size());
-        _pipeline->createDescriptorSetLayout();
+        gu2::Renderer::Settings rendererSettings {
+            &_vulkanSettings,
+            _vulkanPhysicalDevice,
+            _vulkanDevice,
+            _vulkanSurface,
+            &_window
+        };
+        _renderer = std::make_unique<gu2::Renderer>(rendererSettings);
+        _renderer->createSwapChain();
+        _renderer->createImageViews();
+        _renderer->createRenderPass();
+        _renderer->createCommandPool();
 
         // Shaders
         auto vertShaderCode = readFile("../shader/spir-v/vertex_pbr.spv");
         auto fragShaderCode = readFile("../shader/spir-v/fragment_pbr.spv");
 
-        _pipeline->createGraphicsPipeline(
-            createShaderModule(vertShaderCode),
-            createShaderModule(fragShaderCode),
-            // TODO add functionality for multiple vertex attribute descriptions (and descr. caching)
-            _meshes[0].getVertexAttributesDescription().getPipelineVertexInputStateCreateInfo()
-        );
-        _pipeline->createDepthResources(_vulkanGraphicsQueue);
-        _pipeline->createFramebuffers();
-        _pipeline->createCommandBuffers();
-        _pipeline->createSyncObjects();
-        _pipeline->createDescriptorSets(*_texture);
+        // Load sponza (TODO move elsewhere)
+        gu2::GLTFLoader sponzaLoader;
+        sponzaLoader.readFromFile(gu2::Path(ASSETS_DIR) / "sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");
+        gu2::Material::createMaterialsFromGLTF(sponzaLoader, &_materials, &_textures, _vulkanSettings,
+            _vulkanPhysicalDevice, _vulkanDevice, _renderer->getCommandPool(), _vulkanGraphicsQueue);
+
+        gu2::Mesh::createUniformBuffers(_vulkanPhysicalDevice, _vulkanDevice, _vulkanSettings.framesInFlight, 512); // TODO number of uniforms
+        gu2::Mesh::createMeshesFromGLTF(sponzaLoader, &_meshes, _materials,
+            _vulkanSettings, _vulkanPhysicalDevice, _vulkanDevice, _renderer->getCommandPool(), _vulkanGraphicsQueue);
+
+        gu2::Pipeline::Settings pipelineDefaultSettings;
+        pipelineDefaultSettings.device = _vulkanDevice;
+        pipelineDefaultSettings.renderPass = _renderer->getRenderPass();
+        pipelineDefaultSettings.swapChainExtent = _renderer->getSwapChainExtent();
+        pipelineDefaultSettings.vertShaderModule = createShaderModule(vertShaderCode);
+        pipelineDefaultSettings.fragShaderModule = createShaderModule(fragShaderCode);
+        gu2::Pipeline::createPipelines(pipelineDefaultSettings, &_pipelines, &_meshes);
+
+        // Cleanup shader objects
+        vkDestroyShaderModule(_vulkanDevice, pipelineDefaultSettings.fragShaderModule, nullptr);
+        vkDestroyShaderModule(_vulkanDevice, pipelineDefaultSettings.vertShaderModule, nullptr);
+
+        _scene.createFromGLFT(sponzaLoader, _meshes);
+
+        _renderer->createDepthResources(_vulkanGraphicsQueue);
+        _renderer->createFramebuffers();
+        _renderer->createCommandBuffers();
+        _renderer->createSyncObjects();
     }
 
     void createInstance()
@@ -402,12 +419,13 @@ public:
             throw std::runtime_error("Failed to begin recording command buffer!");
         }
 
-        _pipeline->recordRenderPassCommands(commandBuffer, imageIndex);
+        _renderer->recordRenderPassCommands(commandBuffer, imageIndex);
 
         for (size_t nodeId=0; nodeId<_scene.nodes.size(); ++nodeId) {
             const auto& node = _scene.nodes[nodeId];
+            node.mesh->getPipeline().bind(commandBuffer);
             node.mesh->bind(commandBuffer);
-            node.mesh->draw(commandBuffer, *_pipeline, _pipeline->getCurrentFrame(), nodeId);
+            node.mesh->draw(commandBuffer, _renderer->getCurrentFrame(), nodeId);
         }
 
         vkCmdEndRenderPass(commandBuffer);
@@ -424,7 +442,7 @@ public:
                 switch (event.window.action) {
                     case gu2::WindowEventAction::CLOSE: close(); return;
                     case gu2::WindowEventAction::RESIZE:
-                        _pipeline->framebufferResized();
+                        _renderer->framebufferResized();
                         printf("Resize to %d x %d\n", event.window.data1, event.window.data2); fflush(stdout);
                         return;
                     default: break;
@@ -444,11 +462,11 @@ public:
     {
         VkCommandBuffer commandBuffer;
         uint32_t imageIndex;
-        if (!_pipeline->beginRender(_vulkanGraphicsQueue, &commandBuffer, &imageIndex))
+        if (!_renderer->beginRender(_vulkanGraphicsQueue, &commandBuffer, &imageIndex))
             return; // swap chain got resized
         recordCommandBuffer(commandBuffer, imageIndex);
-        _pipeline->updateUniformBuffer(_scene);
-        _pipeline->endRender(_vulkanGraphicsQueue, _vulkanPresentQueue, imageIndex);
+        gu2::Mesh::updateUniformBuffer(_scene, *_renderer);
+        _renderer->endRender(_vulkanGraphicsQueue, _vulkanPresentQueue, imageIndex);
     }
 
 private:
@@ -463,9 +481,11 @@ private:
     VkQueue                         _vulkanGraphicsQueue;
     VkQueue                         _vulkanPresentQueue;
 
-    std::unique_ptr<gu2::Pipeline>  _pipeline;
-    std::unique_ptr<gu2::Texture>   _texture;
+    std::unique_ptr<gu2::Renderer>  _renderer;
+    std::vector<gu2::Texture>       _textures;
+    std::vector<gu2::Material>      _materials;
     std::vector<gu2::Mesh>          _meshes;
+    std::vector<gu2::Pipeline>      _pipelines;
     gu2::Scene                      _scene;
 };
 

@@ -62,8 +62,10 @@ macro(gu2_add_vulkan_lib libname os_lib) # macro for generating versions for dif
     # Library sources
     set(GU2_VULKAN_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/gu2_vulkan/${GU2_BACKEND_SOURCE_FILE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/gu2_vulkan/Material.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/gu2_vulkan/Mesh.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/gu2_vulkan/Pipeline.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/gu2_vulkan/Renderer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/gu2_vulkan/Scene.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/gu2_vulkan/Texture.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/gu2_vulkan/VertexAttributesDescription.cpp

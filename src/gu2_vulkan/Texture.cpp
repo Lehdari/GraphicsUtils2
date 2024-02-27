@@ -43,8 +43,13 @@ Texture::~Texture()
 
 void Texture::createTextureImage(VkCommandPool commandPool, VkQueue queue, const Path& filename)
 {
+#if 1   // TODO temporary toggle to prevent expensive conversion
     auto image = gu2::readImageFromFile<uint8_t>(filename);
     gu2::convertImage(image, image, gu2::ImageFormat::RGBA);
+#else
+    gu2::Image<uint8_t> image(512, 512);
+#endif
+
     _imageMipLevels = std::floor(std::log2(std::max(image.width(), image.height()))) + 1;
     VkDeviceSize imageSize = image.nElements() * sizeof(uint8_t);
 

@@ -22,9 +22,20 @@
 namespace gu2 {
 
 
+// TODO relocate
+struct UniformBufferObject {
+    alignas(16) Mat4f   model;
+    alignas(16) Mat4f   view;
+    alignas(16) Mat4f   projection;
+};
+
+
+class GLTFLoader;
+class Material;
 class Pipeline;
 class Texture;
-class GLTFLoader;
+class Renderer;
+class Scene;
 
 
 class Mesh {
@@ -32,6 +43,7 @@ public:
     static void createMeshesFromGLTF(
         const GLTFLoader& gltfLoader,
         std::vector<Mesh>* meshes,
+        const std::vector<Material>& materials,
         const VulkanSettings& vulkanSettings,
         VkPhysicalDevice physicalDevice,
         VkDevice device,
@@ -63,15 +75,38 @@ public:
     // of upload is finished.
     void upload(VkCommandPool commandPool, VkQueue queue);
 
+    void createDescriptorSets(VkDevice device, int framesInFlight);
+
+    VkDescriptorSetLayout getDescriptorSetLayout() const;
+
+    void setMaterial(const Material* material);
+    const Material& getMaterial() const;
+
+    void setPipeline(const Pipeline* pipeline);
+    const Pipeline& getPipeline() const;
+
     const VertexAttributesDescription& getVertexAttributesDescription() const;
 
-    void bind(VkCommandBuffer commandBuffer);
+    void bind(VkCommandBuffer commandBuffer) const;
     void draw(
         VkCommandBuffer commandBuffer,
-        const Pipeline& pipeline,
         uint32_t currentFrame,
         uint32_t uniformId
     ) const;
+
+    static void createDescriptorPool(VkDevice device, int framesInFlight);
+
+    // Destroy the static _descriptorSetLayout and _descriptorPool
+    static void destroyDescriptorResources(VkDevice device);
+
+    // TODO subject to relocation
+    static void createUniformBuffers(
+        VkPhysicalDevice physicalDevice,
+        VkDevice device,
+        int framesInFlight,
+        uint32_t nUniforms);
+    static void updateUniformBuffer(const Scene& scene, const Renderer& renderer);
+    static void destroyUniformBuffers(VkDevice device);
 
 private:
     // Struct containing vertex data input buffer metadata
@@ -94,11 +129,22 @@ private:
     VertexAttributesDescription     _attributesDescription;
     std::vector<VertexBufferInfo>   _vertexBufferInfos;
     uint32_t                        _nIndices;
+    const Material*                 _material;
+    const Pipeline*                 _pipeline;
 
     std::vector<VkBuffer>           _vertexAttributeBuffers;
     std::vector<VkDeviceMemory>     _vertexBufferMemories;
     VkBuffer                        _indexBuffer;
     VkDeviceMemory                  _indexBufferMemory;
+    static std::vector<VkDescriptorSet> _descriptorSets; // TODO only static for now
+
+    static VkDescriptorSetLayout        _descriptorSetLayout; // just a single layout for uniforms for now (TODO)
+    static VkDescriptorPool             _descriptorPool;
+
+    // TODO store actual uniform buffers elsewhere (use dynamic uniforms)
+    static std::vector<VkBuffer>        _uniformBuffers;
+    static std::vector<VkDeviceMemory>  _uniformBuffersMemory;
+    static std::vector<void*>           _uniformBuffersMapped;
 };
 
 
