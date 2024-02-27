@@ -120,6 +120,9 @@ void GLTFLoader::readFromFile(const Path& filename)
 
                 if (primitive.contains("mode"))
                     p.mode = static_cast<Mesh::Primitive::Mode>(primitive["mode"].get<uint8_t>());
+
+                if (primitive.contains("material"))
+                    p.material = primitive["material"];
             }
         }
         printf("Parsed %lu meshes.\n", _meshes.size());
@@ -140,7 +143,8 @@ void GLTFLoader::readFromFile(const Path& filename)
             b.byteLength = buffer["byteLength"];
 
             if (buffer.contains("uri")) {
-                b.filename = filename.parent_path() / buffer["uri"];
+                b.uri = buffer["uri"];
+                b.filename = filename.parent_path() / b.uri;
 
                 // memory map the file (TODO wrap into an utility function that provides fallback on non-unix systems)
                 int file = open(GU2_PATH_TO_STRING(b.filename), O_RDONLY, 0);
@@ -211,6 +215,84 @@ void GLTFLoader::readFromFile(const Path& filename)
         }
         printf("Parsed %lu accessors.\n", _accessors.size());
     }
+
+    // Parse materials
+    if (_gltfJson.contains("materials")) {
+        const auto& materials = _gltfJson["materials"];
+        _materials.clear();
+        _materials.reserve(materials.size());
+        for (const auto& material : materials) {
+            _materials.emplace_back();
+            auto& m = _materials.back();
+
+            if (material.contains("pbrMetallicRoughness")) {
+                auto& pbrMetallicRoughness = material["pbrMetallicRoughness"];
+                if (pbrMetallicRoughness.contains("baseColorTexture")) {
+                    auto& baseColorTexture = pbrMetallicRoughness["baseColorTexture"];
+                    if (baseColorTexture.contains("index"))
+                        m.pbrMetallicRoughness.baseColorTexture.index = baseColorTexture["index"];
+                    if (baseColorTexture.contains("texCoord"))
+                        m.pbrMetallicRoughness.baseColorTexture.texCoord = baseColorTexture["texCoord"];
+                }
+                if (pbrMetallicRoughness.contains("metallicRoughnessTexture")) {
+                    auto& metallicRoughnessTexture = pbrMetallicRoughness["metallicRoughnessTexture"];
+                    if (metallicRoughnessTexture.contains("index"))
+                        m.pbrMetallicRoughness.metallicRoughnessTexture.index = metallicRoughnessTexture["index"];
+                    if (metallicRoughnessTexture.contains("texCoord"))
+                        m.pbrMetallicRoughness.metallicRoughnessTexture.texCoord = metallicRoughnessTexture["texCoord"];
+                }
+                if (pbrMetallicRoughness.contains("baseColorFactor"))
+                    m.pbrMetallicRoughness.baseColorFactor = pbrMetallicRoughness["baseColorFactor"];
+                if (pbrMetallicRoughness.contains("metallicFactor"))
+                    m.pbrMetallicRoughness.metallicFactor = pbrMetallicRoughness["metallicFactor"];
+                if (pbrMetallicRoughness.contains("roughnessFactor"))
+                    m.pbrMetallicRoughness.roughnessFactor = pbrMetallicRoughness["roughnessFactor"];
+            }
+
+            if (material.contains("normalTexture")) {
+                auto& normalTexture = material["normalTexture"];
+                if (normalTexture.contains("index"))
+                    m.normalTexture.index = normalTexture["index"];
+                if (normalTexture.contains("texCoord"))
+                    m.normalTexture.texCoord = normalTexture["texCoord"];
+                if (normalTexture.contains("scale"))
+                    m.normalTexture.scale = normalTexture["scale"];
+            }
+        }
+        printf("Parsed %lu materials.\n", _materials.size());
+    }
+
+    // Parse textures
+    if (_gltfJson.contains("textures")) {
+        const auto& textures = _gltfJson["textures"];
+        _textures.clear();
+        _textures.reserve(textures.size());
+        for (const auto& texture : textures) {
+            _textures.emplace_back();
+            auto& t = _textures.back();
+
+            if (texture.contains("source"))
+                t.source = texture["source"];
+        }
+        printf("Parsed %lu textures.\n", _textures.size());
+    }
+
+    // Parse images
+    if (_gltfJson.contains("images")) {
+        const auto& images = _gltfJson["images"];
+        _images.clear();
+        _images.reserve(images.size());
+        for (const auto& image : images) {
+            _images.emplace_back();
+            auto& i = _images.back();
+
+            if (image.contains("uri")) {
+                i.uri = image["uri"];
+                i.filename = filename.parent_path() / i.uri;
+            }
+        }
+        printf("Parsed %lu images.\n", _images.size());
+    }
 }
 
 const std::vector<GLTFLoader::Scene>& GLTFLoader::getScenes() const noexcept
@@ -241,4 +323,19 @@ const std::vector<GLTFLoader::BufferView>& GLTFLoader::getBufferViews() const no
 const std::vector<GLTFLoader::Accessor>& GLTFLoader::getAccessors() const noexcept
 {
     return _accessors;
+}
+
+const std::vector<GLTFLoader::Material>& GLTFLoader::getMaterials() const noexcept
+{
+    return _materials;
+}
+
+const std::vector<GLTFLoader::Texture>& GLTFLoader::getTextures() const noexcept
+{
+    return _textures;
+}
+
+const std::vector<GLTFLoader::Image>& GLTFLoader::getImages() const noexcept
+{
+    return _images;
 }

@@ -50,7 +50,7 @@ public:
             Mode                    mode        {Mode::TRIANGLES};
             int64_t                 indices     {-1};
             std::vector<Attribute>  attributes;
-            // TODO material
+            int64_t                 material    {-1};
         };
 
         std::vector<Primitive>  primitives;
@@ -91,6 +91,39 @@ public:
         std::string     type;
     };
 
+    struct Material {
+        struct {
+            struct {
+                int64_t index       {-1};
+                int64_t texCoord    {0};
+            }   baseColorTexture;
+
+            struct {
+                int64_t index       {-1};
+                int64_t texCoord    {0};
+            }   metallicRoughnessTexture;
+
+            Vec4d   baseColorFactor {1.0, 1.0, 1.0, 1.0};
+            float   metallicFactor  {1.0};
+            float   roughnessFactor {1.0};
+        }   pbrMetallicRoughness;
+
+        struct {
+            int64_t index       {-1};
+            int64_t texCoord    {0};
+            double  scale       {1.0};
+        }   normalTexture;
+    };
+
+    struct Texture {
+        int64_t source  {-1};
+    };
+
+    struct Image {
+        std::string uri;
+        Path        filename;
+    };
+
     void readFromFile(const Path& filename);
 
     const std::vector<Scene>& getScenes() const noexcept;
@@ -99,6 +132,9 @@ public:
     const std::vector<Buffer>& getBuffers() const noexcept;
     const std::vector<BufferView>& getBufferViews() const noexcept;
     const std::vector<Accessor>& getAccessors() const noexcept;
+    const std::vector<Material>& getMaterials() const noexcept;
+    const std::vector<Texture>& getTextures() const noexcept;
+    const std::vector<Image>& getImages() const noexcept;
 
 private:
     Json                    _gltfJson;
@@ -108,6 +144,9 @@ private:
     std::vector<Buffer>     _buffers;
     std::vector<BufferView> _bufferViews;
     std::vector<Accessor>   _accessors;
+    std::vector<Material>   _materials;
+    std::vector<Texture>    _textures;
+    std::vector<Image>      _images;
 };
 
 
