@@ -11,6 +11,7 @@
 #pragma once
 
 
+#include <Eigen/Dense>
 #include <nlohmann/json.hpp>
 
 
@@ -56,3 +57,22 @@ struct adl_serializer<Eigen::Quaternion<T_Scalar>> {
     }
 };
 NLOHMANN_JSON_NAMESPACE_END
+
+
+namespace gu2 {
+
+
+// Utility function for initializing static members and such
+template<typename T_Matrix, typename T_First, typename... T_Args>
+T_Matrix initializeMatrix(T_First&& first, T_Args&&... rest)
+{
+    // Check that the number of arguments match
+    static_assert(sizeof...(T_Args)+1 == T_Matrix::RowsAtCompileTime*T_Matrix::ColsAtCompileTime);
+
+    T_Matrix m;
+    ((m << first), ... , rest);
+    return m;
+}
+
+
+} // namespace gu2
