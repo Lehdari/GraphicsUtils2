@@ -23,6 +23,7 @@ For Ubuntu 22.04 an installation script is provided:
 Manual installation:
 
 - Install LunarG Vulkan SDK: https://vulkan.lunarg.com/sdk/home
+- For testing install GTest: `sudo apt install libgtest-dev` (on Ubuntu)
 
 ## Build
 

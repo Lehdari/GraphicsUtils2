@@ -8,6 +8,8 @@
 // with this source code package.
 //
 
+#include <gtest/gtest.h>
+
 #include <gu2_os/App.hpp>
 #include <gu2_os/Window.hpp>
 
@@ -50,7 +52,7 @@ public:
 };
 
 
-int main(void)
+TEST(Windows, WindowsOpenClose)
 {
     gu2::WindowSettings settings1;
     settings1.name = "Little WindowCloseWindow";
@@ -96,6 +98,7 @@ int main(void)
 
             event.type = SDL_KEYDOWN;
             event.key.keysym.scancode = SDL_SCANCODE_ESCAPE;
+            event.key.repeat = 0;
             event.window.windowID = window3.getId();
             SDL_PushEvent(&event);
             event.window.windowID = window4.getId();
@@ -112,11 +115,8 @@ int main(void)
         #endif
 
         // Main loop, should return after 1 update
-        if (gu2::App::update())
-            return EXIT_FAILURE;
+        ASSERT_FALSE(gu2::App::update());
     }
 
     gu2::cleanupBackend();
-
-    return EXIT_SUCCESS;
 }
