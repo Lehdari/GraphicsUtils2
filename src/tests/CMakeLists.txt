@@ -1,6 +1,7 @@
 enable_testing()
 find_package(GTest REQUIRED)
 
+add_subdirectory(test_image)
 add_subdirectory(test_windows)
 
 # required for "test" target
