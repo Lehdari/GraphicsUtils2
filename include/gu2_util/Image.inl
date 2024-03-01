@@ -17,8 +17,8 @@ Image<T_Data>::Image(int width, int height, ImageFormat format, T_Data* data) :
     _data       (data),
     _nElements  (_width*_height*getImageFormatNChannels(format))
 {
-    // Unchanged only allowed in convertImage
-    if (_format == ImageFormat::UNCHANGED)
+    // Check for invalid image formats
+    if (_format == ImageFormat::UNCHANGED || _format == ImageFormat::UNKNOWN)
         throw std::runtime_error("Invalid image format");
 
     // Using internal buffer, allocate it
@@ -34,8 +34,8 @@ Image<T_Data>::Image(const Image<T_Data>& other) :
     _height     (other._height),
     _format     (other._format),
     _data       (nullptr),
-    _nElements  (other._nElements), // allocate a new, internal buffer
-    _buffer     (_nElements)
+    _nElements  (other._nElements),
+    _buffer     (_nElements) // allocate a new, internal buffer
 {
     _data = _buffer.data();
     memcpy(_data, other._data, _nElements*sizeof(T_Data)); // make a copy of the pixel data
@@ -103,6 +103,12 @@ const T_Data* Image<T_Data>::operator()(int x, int y) const
 }
 
 template <typename T_Data>
+INLINE bool Image<T_Data>::usingExternalBuffer()
+{
+    return _data != _buffer.data();
+}
+
+template <typename T_Data>
 void Image<T_Data>::copyFrom(const T_Data* data)
 {
     memcpy(_buffer.data(), data, _nElements * sizeof(T_Data));
@@ -148,12 +154,6 @@ void Image<T_Data>::copyParamsFrom(const Image<T_DataOther>& other)
     _nElements = other._nElements;
     _buffer.resize(_nElements);
     _data = _buffer.data();
-}
-
-template <typename T_Data>
-INLINE bool Image<T_Data>::usingExternalBuffer()
-{
-    return _data != _buffer.data();
 }
 
 template<typename T_Data>

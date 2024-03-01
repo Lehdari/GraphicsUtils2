@@ -19,9 +19,6 @@
 #include "Typedef.hpp"
 
 #include <cstdint>
-#include <filesystem>
-#include <vector>
-#include <type_traits>
 
 
 namespace gu2 {
@@ -45,6 +42,7 @@ public:
     size_t nElements() const noexcept; // returns width * height * nchannels (n. of elements pointed to by data())
     T_Data* operator()(int x, int y);
     const T_Data* operator()(int x, int y) const;
+    INLINE bool usingExternalBuffer();
 
     // Set pixel data (will read width * height * nchannels * sizeof(T_Data) bytes from data)
     void copyFrom(const T_Data* data);
@@ -57,7 +55,7 @@ public:
     template <typename T_DataOther>
     friend class Image;
     template <typename T_DataSrc, typename T_DataDest>
-    friend void convertImage(const Image<T_DataSrc>&, Image<T_DataDest>&, ImageFormat);
+    friend void convertImage(const Image<T_DataSrc>&, Image<T_DataDest>&, ImageFormat, bool);
     friend class ImageConverter;
 
 private:
@@ -72,7 +70,6 @@ private:
     template <typename T_DataOther>
     void copyParamsFrom(const Image<T_DataOther>& other);
 
-    INLINE bool usingExternalBuffer();
 };
 
 

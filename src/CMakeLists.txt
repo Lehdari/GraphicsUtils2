@@ -14,11 +14,19 @@ target_link_libraries(gu2_util
     PUBLIC  stb
     PUBLIC  nlohmann_json::nlohmann_json
 )
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(gu2_util PUBLIC OpenMP::OpenMP_CXX)
+endif()
 target_include_directories(gu2_util
     PUBLIC  $<BUILD_INTERFACE:${GU2_INCLUDE_DIR}> $<INSTALL_INTERFACE:include>
     PRIVATE ${GU2_INCLUDE_DIR}/gu2_util
 )
-set_property(TARGET gu2_util PROPERTY CXX_STANDARD 20)
+set_property(TARGET gu2_util
+    PROPERTY    CXX_STANDARD    20
+)
+target_compile_options(gu2_util
+    PUBLIC  "-march=native"
+)
 add_library(gu2::util ALIAS gu2_util)
 
 

@@ -23,6 +23,8 @@ add_library(vulkan INTERFACE)
 target_include_directories(vulkan SYSTEM INTERFACE ${Vulkan_INCLUDE_DIR})
 target_link_libraries(vulkan INTERFACE ${Vulkan_LIBRARY})
 
+find_package(OpenMP)
+
 # Required for shader installation
 set(GU2_SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shader)
 
