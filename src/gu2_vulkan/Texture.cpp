@@ -18,34 +18,42 @@ using namespace gu2;
 
 Texture::Texture(
     VkPhysicalDevice physicalDevice,
-    VkDevice device,
-    VkCommandPool commandPool,
-    VkQueue queue,
-    const Path& filename) :
+    VkDevice device) :
     _physicalDevice (physicalDevice),
-    _device         (device)
+    _device         (device),
+    _image          (nullptr),
+    _imageMemory    (nullptr),
+    _imageView      (nullptr),
+    _sampler        (nullptr)
 {
     // Store the device properties in local struct
     vkGetPhysicalDeviceProperties(_physicalDevice, &_physicalDeviceProperties);
+}
 
+Texture::~Texture()
+{
+    if (_sampler != nullptr)
+        vkDestroySampler(_device, _sampler, nullptr);
+    if (_imageView != nullptr)
+        vkDestroyImageView(_device, _imageView, nullptr);
+    if (_image != nullptr)
+        vkDestroyImage(_device, _image, nullptr);
+    if (_imageMemory != nullptr)
+        vkFreeMemory(_device, _imageMemory, nullptr);
+}
+
+void Texture::loadFromFile(VkCommandPool commandPool, VkQueue queue, const Path& filename)
+{
     createTextureImage(commandPool, queue, filename);
     createTextureImageView();
     createTextureSampler();
 }
 
-Texture::~Texture()
-{
-    vkDestroySampler(_device, _sampler, nullptr);
-    vkDestroyImageView(_device, _imageView, nullptr);
-    vkDestroyImage(_device, _image, nullptr);
-    vkFreeMemory(_device, _imageMemory, nullptr);
-}
-
 void Texture::createTextureImage(VkCommandPool commandPool, VkQueue queue, const Path& filename)
 {
 #if 1   // TODO temporary toggle to prevent expensive conversion
-    auto image = gu2::readImageFromFile<uint8_t>(filename);
-    gu2::convertImage(image, image, gu2::ImageFormat::RGBA);
+    Image<uint8_t> image;
+    gu2::convertImage(gu2::readImageFromFile<uint8_t>(filename), image, gu2::ImageFormat::RGBA);
 #else
     gu2::Image<uint8_t> image(512, 512);
 #endif
@@ -63,19 +71,23 @@ void Texture::createTextureImage(VkCommandPool commandPool, VkQueue queue, const
     memcpy(data, image.data(), static_cast<size_t>(imageSize));
     vkUnmapMemory(_device, stagingBufferMemory);
 
-    gu2::createImage(_physicalDevice, _device,
-        image.width(), image.height(), _imageMipLevels,
-        VK_FORMAT_R8G8B8A8_SRGB,
-        VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _image, _imageMemory);
+    #pragma omp critical
+    {
+        gu2::createImage(_physicalDevice, _device,
+            image.width(), image.height(), _imageMipLevels,
+            VK_FORMAT_R8G8B8A8_SRGB,
+            VK_IMAGE_TILING_OPTIMAL,
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _image, _imageMemory);
 
-    gu2::transitionImageLayout(_device, commandPool, queue, _image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, _imageMipLevels);
-    gu2::copyBufferToImage(_device, commandPool, queue, stagingBuffer, _image,
-        static_cast<uint32_t>(image.width()), static_cast<uint32_t>(image.height()));
-    gu2::generateMipmaps(_physicalDevice, _device, commandPool, queue, _image, VK_FORMAT_R8G8B8A8_SRGB,
-        image.width(), image.height(), _imageMipLevels);
+        gu2::transitionImageLayout(_device, commandPool, queue, _image, VK_FORMAT_R8G8B8A8_SRGB,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, _imageMipLevels);
+        gu2::copyBufferToImage(_device, commandPool, queue, stagingBuffer, _image,
+            static_cast<uint32_t>(image.width()), static_cast<uint32_t>(image.height()));
+        gu2::generateMipmaps(_physicalDevice, _device, commandPool, queue, _image, VK_FORMAT_R8G8B8A8_SRGB,
+            image.width(), image.height(), _imageMipLevels);
+    }
 
     vkDestroyBuffer(_device, stagingBuffer, nullptr);
     vkFreeMemory(_device, stagingBufferMemory, nullptr);

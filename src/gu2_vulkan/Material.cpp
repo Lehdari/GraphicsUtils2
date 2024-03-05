@@ -39,22 +39,25 @@ void Material::createMaterialsFromGLTF(
     materials->reserve(gltfMaterials.size());
 
     auto& gltfTextures = gltfLoader.getTextures();
+    auto nTextures = gltfTextures.size();
     textures->clear();
-    textures->reserve(gltfTextures.size());
+    for (const auto& t : gltfTextures)
+        textures->emplace_back(physicalDevice, device);
 
     auto& gltfImages = gltfLoader.getImages();
 
-    uint32_t tId = 0;
-    for (const auto& t : gltfTextures) {
+    #pragma omp parallel for
+    for (decltype(nTextures) i=0; i<nTextures; ++i) {
+        const auto& t = gltfTextures[i];
         if (t.source < 0)
             throw std::runtime_error("Texture source not defined");
 
         const auto& imageFilename = gltfImages.at(t.source).filename;
 
-        textures->emplace_back(physicalDevice, device, commandPool, queue, imageFilename);
-        auto& texture = textures->back();
+        auto& texture = textures->at(i);
+        texture.loadFromFile(commandPool, queue, imageFilename);
 
-        printf("Added texture %u / %lu from %s\n", tId++, gltfTextures.size(), GU2_PATH_TO_STRING(imageFilename));
+        printf("Added texture %u / %lu from %s\n", i, nTextures, GU2_PATH_TO_STRING(imageFilename));
         fflush(stdout);
     }
 
