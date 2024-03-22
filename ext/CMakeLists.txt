@@ -16,6 +16,11 @@ if (GU2_SHARED_LIBS)
 endif()
 add_subdirectory(SDL)
 
+# shaderc
+execute_process(COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/shaderc/utils/git-sync-deps)
+set(SHADERC_SKIP_TESTS ON)
+add_subdirectory(shaderc)
+
 # stb
 add_library(stb INTERFACE)
 target_include_directories(stb

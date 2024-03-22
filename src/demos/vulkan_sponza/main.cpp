@@ -27,6 +27,8 @@
 
 #include <vulkan/vulkan.h>
 
+#include <shaderc/shaderc.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -180,8 +182,12 @@ public:
         _renderer->createCommandPool();
 
         // Shaders
-        auto vertShaderCode = readFile("../shader/spir-v/vertex_pbr.spv");
-        auto fragShaderCode = readFile("../shader/spir-v/fragment_pbr.spv");
+        auto vertShaderCode = gu2::compileFileToAssembly(
+            "shader/vertex/pbr.glsl", shaderc_glsl_vertex_shader,
+            readFile(gu2::Path(GU2_SHADER_DIR) / "vertex/pbr.glsl"));
+        auto fragShaderCode = gu2::compileFileToAssembly(
+            "shader/fragment/pbr.gls=l", shaderc_glsl_fragment_shader,
+            readFile(gu2::Path(GU2_SHADER_DIR) / "fragment/pbr.glsl"));
 
         // Load sponza (TODO move elsewhere)
         gu2::GLTFLoader sponzaLoader;
@@ -391,14 +397,12 @@ public:
         vkGetDeviceQueue(_vulkanDevice, familyIndices.presentFamily.value(), 0, &_vulkanPresentQueue);
     }
 
-
-
-    VkShaderModule createShaderModule(const std::vector<char>& code)
+    VkShaderModule createShaderModule(const std::vector<uint32_t>& code)
     {
         VkShaderModuleCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        createInfo.codeSize = code.size();
-        createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+        createInfo.codeSize = code.size() * sizeof(uint32_t);
+        createInfo.pCode = code.data();
 
         VkShaderModule shaderModule;
         if (vkCreateShaderModule(_vulkanDevice, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {

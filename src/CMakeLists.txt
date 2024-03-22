@@ -91,18 +91,23 @@ macro(gu2_add_vulkan_lib libname os_lib) # macro for generating versions for dif
         PUBLIC  ${os_lib} # pick the correct OS backend
         PUBLIC  gu2_util
         PUBLIC  vulkan
+        PUBLIC  shaderc_combined
     )
     target_include_directories(${libname}
         PUBLIC  $<BUILD_INTERFACE:${GU2_INCLUDE_DIR}> $<INSTALL_INTERFACE:include>
         PRIVATE ${GU2_INCLUDE_DIR}/gu2_vulkan
     )
     set_property(TARGET ${libname} PROPERTY CXX_STANDARD 20)
-    add_custom_command(
-        TARGET ${libname} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${GU2_SHADER_DIR} $<TARGET_FILE_DIR:${libname}>/shader
-        COMMENT "Copying shaders" VERBATIM
+    target_compile_definitions(${libname}
+        PUBLIC  $<BUILD_INTERFACE:-DGU2_SHADER_DIR=\"${GU2_SHADER_DIR}\">
+        PUBLIC  $<INSTALL_INTERFACE:-DGU2_SHADER_DIR=\"shader\">
     )
+#    add_custom_command(
+#        TARGET ${libname} POST_BUILD
+#        COMMAND ${CMAKE_COMMAND} -E copy_directory
+#        ${GU2_SHADER_DIR} $<TARGET_FILE_DIR:${libname}>/shader
+#        COMMENT "Copying shaders" VERBATIM
+#    )
 endmacro()
 
 gu2_add_vulkan_lib(gu2_vulkan gu2::os)
