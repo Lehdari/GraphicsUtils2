@@ -17,6 +17,7 @@
 #ifdef __unix__
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <unistd.h>
 #else
 #error "Memory mapping only supported on unix systems"
 #endif // __unix__
