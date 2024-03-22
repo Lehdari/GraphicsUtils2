@@ -531,7 +531,7 @@ public:
             return capabilities.currentExtent;
         } else {
             int width, height;
-            getWindowFramebufferSize(_window, &width, &height);
+            gu2::getWindowFramebufferSize(&_window, &width, &height);
 
             VkExtent2D actualExtent = {
                 static_cast<uint32_t>(width),
