@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "Util.hpp"
 #include "gu2_util/Typedef.hpp"
 
 #include <vulkan/vulkan.h>
