@@ -10,6 +10,7 @@ target_link_libraries(demo_vulkan_triangle
     PUBLIC  gu2::util
 )
 set_property(TARGET demo_vulkan_triangle PROPERTY CXX_STANDARD 20)
+install(TARGETS demo_vulkan_triangle)
 
 # vulkan_box demo
 set(VULKAN_BOX_SOURCES
@@ -26,6 +27,7 @@ target_compile_definitions(demo_vulkan_box
     PUBLIC  -DASSETS_DIR=\"${GU2_ASSETS_DIR}\"
 )
 set_property(TARGET demo_vulkan_box PROPERTY CXX_STANDARD 20)
+install(TARGETS demo_vulkan_box)
 
 # vulkan_sponza demo
 set(VULKAN_SPONZA_SOURCES
@@ -42,3 +44,4 @@ target_compile_definitions(demo_vulkan_sponza
     PUBLIC  -DASSETS_DIR=\"${GU2_ASSETS_DIR}\"
 )
 set_property(TARGET demo_vulkan_sponza PROPERTY CXX_STANDARD 20)
+install(TARGETS demo_vulkan_sponza)

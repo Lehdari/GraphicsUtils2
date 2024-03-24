@@ -28,6 +28,7 @@ target_compile_options(gu2_util
     PUBLIC  "-march=native"
 )
 add_library(gu2::util ALIAS gu2_util)
+install(TARGETS gu2_util)
 
 
 # gu2::os
@@ -63,6 +64,7 @@ endmacro()
 
 gu2_add_os_lib(gu2_os)
 add_library(gu2::os ALIAS gu2_os)
+install(TARGETS gu2_os)
 
 
 # gu2::vulkan
@@ -102,16 +104,15 @@ macro(gu2_add_vulkan_lib libname os_lib) # macro for generating versions for dif
         PUBLIC  $<BUILD_INTERFACE:-DGU2_SHADER_DIR=\"${GU2_SHADER_DIR}\">
         PUBLIC  $<INSTALL_INTERFACE:-DGU2_SHADER_DIR=\"shader\">
     )
-#    add_custom_command(
-#        TARGET ${libname} POST_BUILD
-#        COMMAND ${CMAKE_COMMAND} -E copy_directory
-#        ${GU2_SHADER_DIR} $<TARGET_FILE_DIR:${libname}>/shader
-#        COMMENT "Copying shaders" VERBATIM
-#    )
+    install(
+        DIRECTORY   ${GU2_SHADER_DIR}
+        DESTINATION ${CMAKE_INSTALL_PREFIX}
+        FILES_MATCHING PATTERN "*.glsl")
 endmacro()
 
 gu2_add_vulkan_lib(gu2_vulkan gu2::os)
 add_library(gu2::vulkan ALIAS gu2_vulkan)
+install(TARGETS gu2_vulkan)
 
 
 # Tests
