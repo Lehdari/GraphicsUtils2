@@ -17,7 +17,6 @@
 #include "gu2_util/Typedef.hpp"
 
 #include <vulkan/vulkan.h>
-#include <shaderc/shaderc.hpp>
 
 #include <optional>
 
@@ -565,31 +564,6 @@ template <> struct AttributeFormat_Impl<Vec4f> { static constexpr VkFormat forma
 // alias for streamlined usage, example: AttributeFormat<Vec3f>
 template <typename T_Matrix>
 inline constexpr VkFormat AttributeFormat = AttributeFormat_Impl<T_Matrix>::format;
-
-
-// Returns GLSL shader source text after preprocessing.
-inline std::vector<uint32_t> compileFileToAssembly(
-    const std::string& sourceFilename,
-    shaderc_shader_kind kind,
-    const std::vector<char>& source,
-    bool optimize = false)
-{
-    shaderc::Compiler compiler;
-    shaderc::CompileOptions options;
-
-    // Like -DMY_DEFINE=1
-//    options.AddMacroDefinition("MY_DEFINE", "1");
-    if (optimize) options.SetOptimizationLevel(shaderc_optimization_level_size);
-
-    shaderc::CompilationResult result = compiler.CompileGlslToSpv(
-        source.data(), source.size(), kind, GU2_PATH_TO_STRING(sourceFilename), options);
-
-    if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
-        throw std::runtime_error(result.GetErrorMessage());
-    }
-
-    return { result.cbegin(), result.cend() };
-}
 
 
 } // namespace gu2

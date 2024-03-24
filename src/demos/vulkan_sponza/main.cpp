@@ -22,6 +22,7 @@
 #include <gu2_vulkan/Texture.hpp>
 #include <gu2_vulkan/QueryWrapper.hpp>
 #include <gu2_vulkan/Scene.hpp>
+#include <gu2_vulkan/Shader.hpp>
 #include <gu2_vulkan/Util.hpp>
 #include <gu2_vulkan/VulkanSettings.hpp>
 
@@ -109,25 +110,6 @@ void DestroyDebugUtilsMessengerEXT(
     }
 }
 
-std::vector<char> readFile(const gu2::Path& filename)
-{
-    if (!std::filesystem::exists(filename))
-        throw std::runtime_error("File " + filename.string() + " does not exist");
-    if (!std::filesystem::is_regular_file(filename))
-        throw std::runtime_error(filename.string() + " is not a file");
-
-    FILE *f = fopen(GU2_PATH_TO_STRING(filename), "rb");
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);  /* same as rewind(f); */
-
-    std::vector<char> buffer(fsize);
-    fread(buffer.data(), fsize, 1, f);
-    fclose(f);
-
-    return buffer;
-}
-
 
 class VulkanWindow : public gu2::Window<VulkanWindow> {
 public:
@@ -182,12 +164,9 @@ public:
         _renderer->createCommandPool();
 
         // Shaders
-        auto vertShaderCode = gu2::compileFileToAssembly(
-            "shader/vertex/pbr.glsl", shaderc_glsl_vertex_shader,
-            readFile(gu2::Path(GU2_SHADER_DIR) / "vertex/pbr.glsl"));
-        auto fragShaderCode = gu2::compileFileToAssembly(
-            "shader/fragment/pbr.gls=l", shaderc_glsl_fragment_shader,
-            readFile(gu2::Path(GU2_SHADER_DIR) / "fragment/pbr.glsl"));
+        gu2::Shader vertShader(_vulkanDevice), fragShader(_vulkanDevice);
+        vertShader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "vertex/pbr.glsl");
+        fragShader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "fragment/pbr.glsl");
 
         // Load sponza (TODO move elsewhere)
         gu2::GLTFLoader sponzaLoader;
@@ -203,13 +182,9 @@ public:
         pipelineDefaultSettings.device = _vulkanDevice;
         pipelineDefaultSettings.renderPass = _renderer->getRenderPass();
         pipelineDefaultSettings.swapChainExtent = _renderer->getSwapChainExtent();
-        pipelineDefaultSettings.vertShaderModule = createShaderModule(vertShaderCode);
-        pipelineDefaultSettings.fragShaderModule = createShaderModule(fragShaderCode);
+        pipelineDefaultSettings.vertShaderModule = vertShader.getShaderModule();
+        pipelineDefaultSettings.fragShaderModule = fragShader.getShaderModule();
         gu2::Pipeline::createPipelines(pipelineDefaultSettings, &_pipelines, &_meshes);
-
-        // Cleanup shader objects
-        vkDestroyShaderModule(_vulkanDevice, pipelineDefaultSettings.fragShaderModule, nullptr);
-        vkDestroyShaderModule(_vulkanDevice, pipelineDefaultSettings.vertShaderModule, nullptr);
 
         _scene.createFromGLFT(sponzaLoader, _meshes);
 
@@ -395,21 +370,6 @@ public:
 
         vkGetDeviceQueue(_vulkanDevice, familyIndices.graphicsFamily.value(), 0, &_vulkanGraphicsQueue);
         vkGetDeviceQueue(_vulkanDevice, familyIndices.presentFamily.value(), 0, &_vulkanPresentQueue);
-    }
-
-    VkShaderModule createShaderModule(const std::vector<uint32_t>& code)
-    {
-        VkShaderModuleCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        createInfo.codeSize = code.size() * sizeof(uint32_t);
-        createInfo.pCode = code.data();
-
-        VkShaderModule shaderModule;
-        if (vkCreateShaderModule(_vulkanDevice, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create shader module!");
-        }
-
-        return shaderModule;
     }
 
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
