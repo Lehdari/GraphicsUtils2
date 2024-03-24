@@ -40,11 +40,12 @@ Renderer::Renderer(const Settings& settings) :
 Renderer::~Renderer()
 {
     cleanupSwapChain();
-    for (int i=0; i<_vulkanSettings->framesInFlight; ++i) {
-        vkDestroySemaphore(_device, _imageAvailableSemaphores[i], nullptr);
-        vkDestroySemaphore(_device, _renderFinishedSemaphores[i], nullptr);
-        vkDestroyFence(_device, _inFlightFences[i], nullptr);
-    }
+    for (auto& imageAvailableSemaphore : _imageAvailableSemaphores)
+        vkDestroySemaphore(_device, imageAvailableSemaphore, nullptr);
+    for (auto& renderFinishedSemaphore : _renderFinishedSemaphores)
+        vkDestroySemaphore(_device, renderFinishedSemaphore, nullptr);
+    for (auto& inFlightFence : _inFlightFences)
+        vkDestroyFence(_device, inFlightFence, nullptr);
     vkDestroyCommandPool(_device, _commandPool, nullptr);
     vkDestroyRenderPass(_device, _renderPass, nullptr);
 }
