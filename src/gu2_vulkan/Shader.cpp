@@ -11,6 +11,8 @@
 #include "Shader.hpp"
 #include "gu2_util/FileUtils.hpp"
 
+#include "spirv_reflect.h"
+
 
 using namespace gu2;
 

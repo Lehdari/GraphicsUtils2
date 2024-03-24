@@ -95,6 +95,7 @@ macro(gu2_add_vulkan_lib libname os_lib) # macro for generating versions for dif
         PUBLIC  gu2_util
         PUBLIC  vulkan
         PUBLIC  shaderc_combined
+        PUBLIC  spirv-reflect-static
     )
     target_include_directories(${libname}
         PUBLIC  $<BUILD_INTERFACE:${GU2_INCLUDE_DIR}> $<INSTALL_INTERFACE:include>

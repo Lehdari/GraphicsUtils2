@@ -21,6 +21,15 @@ execute_process(COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/shaderc/utils/git-sy
 set(SHADERC_SKIP_TESTS ON)
 add_subdirectory(shaderc)
 
+#SPIRV-Reflect
+add_library(spirv-reflect-static STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/SPIRV-Reflect/spirv_reflect.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SPIRV-Reflect/spirv_reflect.cpp
+)
+target_include_directories(spirv-reflect-static
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/SPIRV-Reflect
+)
+
 # stb
 add_library(stb INTERFACE)
 target_include_directories(stb
