@@ -42,7 +42,10 @@ void Shader::loadFromFile(const Path& filename, ShaderType type, bool optimize)
         source.data(), source.size(), type, GU2_PATH_TO_STRING(filename), options);
 
     if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
-        throw std::runtime_error(result.GetErrorMessage());
+        std::string error(result.GetErrorMessage());
+        if (result.GetCompilationStatus() == shaderc_compilation_status_invalid_stage)
+            error = "Unable to deduce the shader stage. Please use #pragma shader_stage in shader header or provide the correct type to loadFromFile";
+        throw std::runtime_error(error);
     }
 
     _spirv = { result.cbegin(), result.cend() };
