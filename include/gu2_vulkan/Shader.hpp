@@ -43,6 +43,8 @@ public:
     const SpirvByteCode& getSpirvByteCode() const noexcept;
     VkShaderModule getShaderModule() const noexcept;
 
+    void reflectionTest();
+
     static VkShaderModule createShaderModule(VkDevice device, const SpirvByteCode& code);
 
 private:
