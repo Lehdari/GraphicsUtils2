@@ -32,7 +32,9 @@ public:
     Shader& operator=(const Shader&) = delete;
     Shader& operator=(Shader&&) = default;
     ~Shader();
-    
+
+    void addMacroDefinition(const std::string& name, const std::string& value);
+
     void loadFromFile(
         const Path& filename,
         ShaderType type = shaderc_glsl_infer_from_source,
@@ -48,6 +50,7 @@ private:
     Path            _filename;
     SpirvByteCode   _spirv; // SPIR-V bytecode
     VkShaderModule  _shaderModule;
+    std::vector<std::pair<std::string, std::string>>    _macroDefinitions; // TODO tidy up (use struct instead of pair)
 };
 
 

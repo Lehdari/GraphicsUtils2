@@ -29,6 +29,11 @@ Shader::~Shader()
         vkDestroyShaderModule(_device, _shaderModule, nullptr);
 }
 
+void Shader::addMacroDefinition(const std::string& name, const std::string& value)
+{
+    _macroDefinitions.emplace_back(name, value);
+}
+
 void Shader::loadFromFile(const Path& filename, ShaderType type, bool optimize)
 {
     auto source = readFile(filename);
@@ -36,8 +41,10 @@ void Shader::loadFromFile(const Path& filename, ShaderType type, bool optimize)
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;
 
-    // Like -DMY_DEFINE=1
-    //    options.AddMacroDefinition("MY_DEFINE", "1");
+    for (const auto& macro : _macroDefinitions) {
+        options.AddMacroDefinition(macro.first, macro.second);
+    }
+
     if (optimize) options.SetOptimizationLevel(shaderc_optimization_level_size);
 
     shaderc::CompilationResult result = compiler.CompileGlslToSpv(
