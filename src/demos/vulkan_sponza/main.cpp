@@ -18,6 +18,7 @@
 #include <gu2_vulkan/Material.hpp>
 #include <gu2_vulkan/Mesh.hpp>
 #include <gu2_vulkan/Pipeline.hpp>
+#include <gu2_vulkan/PipelineManager.hpp>
 #include <gu2_vulkan/Renderer.hpp>
 #include <gu2_vulkan/Texture.hpp>
 #include <gu2_vulkan/QueryWrapper.hpp>
@@ -111,6 +112,359 @@ void DestroyDebugUtilsMessengerEXT(
 }
 
 
+int64_t findShaderWithInputs(
+    std::vector<gu2::Shader>* shaders,
+    const std::vector<std::string>& requiredInputs,
+    const std::vector<std::string>& requiredDescriptorBindings
+) {
+    for (int64_t i=0; i<shaders->size(); ++i) {
+        const auto& shader = shaders->at(i);
+        const auto& shaderInputVariables = shader.getInputVariables();
+        if (requiredInputs.size() != shaderInputVariables.size())
+            continue;
+        const auto& shaderDescriptorBindings = shader.getDescriptorBindings();
+        if (requiredDescriptorBindings.size() != shaderDescriptorBindings.size())
+            continue;
+
+        int requiredInputsFound = 0;
+        for (const auto& requiredInput : requiredInputs) {
+            for (const auto& shaderInputVariable : shaderInputVariables) {
+                if (shaderInputVariable->name == requiredInput) {
+                    ++requiredInputsFound;
+                    break;
+                }
+            }
+        }
+
+        int requiredDescriptorBindingsFound = 0;
+        for (const auto& requiredDescriptorBinding : requiredDescriptorBindings) {
+            for (const auto& shaderDescriptorBinding : shaderDescriptorBindings) {
+                if (shaderDescriptorBinding->name == requiredDescriptorBinding) {
+                    ++requiredDescriptorBindingsFound;
+                    break;
+                }
+            }
+        }
+
+        if (requiredInputsFound == shaderInputVariables.size() &&
+            requiredDescriptorBindingsFound == shaderDescriptorBindings.size())
+            return i;
+    }
+
+    return -1;
+}
+
+struct MaterialBuildInfo {
+    int64_t                                 vertexShaderId              {-1};
+    int64_t                                 fragmentShaderId            {-1};
+    int64_t                                 baseColorTextureId          {-1};
+    int64_t                                 metallicRoughnessTextureId  {-1};
+    int64_t                                 normalTextureId             {-1};
+    VkPipelineVertexInputStateCreateInfo    vertexInputInfo;
+};
+bool operator==(const MaterialBuildInfo& info1, const MaterialBuildInfo& info2) {
+    return info1.vertexShaderId == info2.vertexShaderId &&
+        info1.fragmentShaderId == info2.fragmentShaderId &&
+        info1.baseColorTextureId == info2.baseColorTextureId &&
+        info1.metallicRoughnessTextureId == info2.metallicRoughnessTextureId &&
+        info1.normalTextureId == info2.normalTextureId;
+}
+
+void createFromGLTF(
+    const gu2::GLTFLoader& gltfLoader,
+    std::vector<gu2::Mesh>* meshes,
+    std::vector<gu2::Material>* materials,
+    std::vector<gu2::Shader>* shaders,
+    std::vector<gu2::Texture>* textures,
+    const gu2::VulkanSettings& vulkanSettings,
+    VkPhysicalDevice physicalDevice,
+    VkDevice device,
+    VkCommandPool commandPool,
+    VkQueue queue,
+    gu2::PipelineManager* pipelineManager
+) {
+    auto& gltfTextures = gltfLoader.getTextures();
+    auto nTextures = gltfTextures.size();
+    textures->clear();
+    for (const auto& t : gltfTextures)
+        textures->emplace_back(physicalDevice, device);
+
+    auto& gltfImages = gltfLoader.getImages();
+
+    #pragma omp parallel for
+    for (decltype(nTextures) i=0; i<nTextures; ++i) {
+        const auto& t = gltfTextures[i];
+        if (t.source < 0)
+            throw std::runtime_error("Texture source not defined");
+
+        const auto& imageFilename = gltfImages.at(t.source).filename;
+
+        auto& texture = textures->at(i);
+        texture.loadFromFile(commandPool, queue, imageFilename);
+
+        printf("Added texture %u / %lu from %s\n", i, nTextures, GU2_PATH_TO_STRING(imageFilename));
+        fflush(stdout);
+    }
+
+    auto& gltfMeshes = gltfLoader.getMeshes();
+    auto& gltfMaterials = gltfLoader.getMaterials();
+
+    // Count the number of primitives (one gu2::Mesh corresponds to a single GLTF mesh primitive, not mesh)
+    size_t nPrimitives = 0;
+    for (const auto& m : gltfMeshes)
+        nPrimitives += m.primitives.size();
+
+    std::vector<MaterialBuildInfo> materialBuildInfos;
+
+    // Build meshes, shaders and materials
+    meshes->clear();
+    meshes->reserve(nPrimitives);
+    std::vector<int64_t> meshMaterialIds;
+    meshMaterialIds.reserve(nPrimitives);
+    for (const auto& m : gltfMeshes) {
+        for (const auto& p : m.primitives) {
+            meshes->emplace_back(vulkanSettings, physicalDevice, device);
+            auto& mesh = meshes->back();
+
+            if (p.indices < 0) {
+                fprintf(stderr, "WARNING: Unindexed meshes not currently supported, skipping...\n");
+                continue;
+            }
+
+            printf("==============\n");
+            // List required vertex attributes
+            std::vector<std::string> requiredVertexAttributes, requiredFragmentInputs;
+            for (const auto& attribute : p.attributes) {
+                if (attribute.name == "POSITION") {
+                    requiredVertexAttributes.emplace_back("inPosition");
+                }
+                else if (attribute.name == "NORMAL") {
+                    requiredVertexAttributes.emplace_back("inNormal");
+                    requiredFragmentInputs.emplace_back("fragNormal");
+                }
+                else if (attribute.name == "TANGENT") {
+                    requiredVertexAttributes.emplace_back("inTangent");
+                    requiredFragmentInputs.emplace_back("fragTangent");
+                }
+                else if (attribute.name.substr(0, 9) == "TEXCOORD_") {
+                    requiredVertexAttributes.emplace_back("inTexCoord" + attribute.name.substr(9, 1));
+                    requiredFragmentInputs.emplace_back("fragTexCoord" + attribute.name.substr(9, 1));
+                }
+            }
+
+            // Try to find a vertex shader that matches the required input vertex attributes
+            MaterialBuildInfo materialBuildInfo;
+            materialBuildInfo.vertexShaderId = findShaderWithInputs(shaders, requiredVertexAttributes, {"ubo"});
+            if (materialBuildInfo.vertexShaderId < 0) { // no suitable shader found, make a new one
+                materialBuildInfo.vertexShaderId = shaders->size();
+                shaders->emplace_back(device);
+                auto& shader = shaders->back();
+                if (requiredVertexAttributes.size() < 5)
+                    shader.addMacroDefinition("DISABLE_IN_TEX_COORD_1", "true");
+                shader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "vertex/pbr.glsl");
+            }
+
+            printf("requiredVertexAttributes.size(): %lu vertexShaderId: %ld\n",
+                requiredVertexAttributes.size(), materialBuildInfo.vertexShaderId);
+
+            // List required descriptor bindings
+            auto& gltfMaterial = gltfMaterials.at(p.material);
+            std::vector<std::string> requiredDescriptorBindings;
+
+            if (gltfMaterial.pbrMetallicRoughness.baseColorTexture.index >= 0) {
+                requiredDescriptorBindings.emplace_back("baseColorTexture");
+                materialBuildInfo.baseColorTextureId = gltfMaterial.pbrMetallicRoughness.baseColorTexture.index;
+            }
+            if (gltfMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index >= 0) {
+                requiredDescriptorBindings.emplace_back("metallicRoughnessTexture");
+                materialBuildInfo.metallicRoughnessTextureId = gltfMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index;
+            }
+            if (gltfMaterial.normalTexture.index >= 0) {
+                requiredDescriptorBindings.emplace_back("normalTexture");
+                materialBuildInfo.normalTextureId = gltfMaterial.normalTexture.index;
+            }
+
+            // Try to find a fragment shader that matches the required input vertex attributes
+            materialBuildInfo.fragmentShaderId = findShaderWithInputs(shaders, requiredFragmentInputs,
+                requiredDescriptorBindings);
+            if (materialBuildInfo.fragmentShaderId < 0) { // no suitable shader found, make a new one
+                materialBuildInfo.fragmentShaderId = shaders->size();
+                shaders->emplace_back(device);
+                auto& shader = shaders->back();
+
+                if (requiredVertexAttributes.size() < 5)
+                    shader.addMacroDefinition("DISABLE_IN_TEX_COORD_1", "true");
+                if (std::find(requiredDescriptorBindings.begin(), requiredDescriptorBindings.end(),
+                    "baseColorTexture") == requiredDescriptorBindings.end())
+                    shader.addMacroDefinition("DISABLE_BASE_COLOR", "true");
+                if (std::find(requiredDescriptorBindings.begin(), requiredDescriptorBindings.end(),
+                    "metallicRoughnessTexture") == requiredDescriptorBindings.end())
+                    shader.addMacroDefinition("DISABLE_METALLIC_ROUGHNESS", "true");
+                if (std::find(requiredDescriptorBindings.begin(), requiredDescriptorBindings.end(),
+                    "normalTexture") == requiredDescriptorBindings.end())
+                    shader.addMacroDefinition("DISABLE_USE_NORMAL_TEXTURE", "true");
+
+                shader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "fragment/pbr.glsl");
+            }
+
+            printf("requiredDescriptorBindings.size(): %lu fragmentShaderId: %ld\n",
+                requiredDescriptorBindings.size(), materialBuildInfo.fragmentShaderId);
+
+            // Add vertex attribute data
+            for (const auto& attribute : p.attributes) {
+                if (attribute.accessorId < 0)
+                    throw std::runtime_error("No accessor ID for attribute \"" + attribute.name + "\" defined");
+                auto& accessor = gltfLoader.getAccessors().at(attribute.accessorId);
+                if (accessor.bufferView < 0)
+                    throw std::runtime_error("No buffer view for attribute \"" + attribute.name + "\" defined");
+                auto& bufferView = gltfLoader.getBufferViews().at(accessor.bufferView);
+                if (bufferView.buffer < 0)
+                    throw std::runtime_error("No buffer for attribute \"" + attribute.name + "\" defined");
+                auto& buffer = gltfLoader.getBuffers().at(bufferView.buffer);
+                if (buffer.buffer == nullptr)
+                    throw std::runtime_error("No buffer loaded");
+
+                if (attribute.name == "POSITION") {
+                    if (accessor.componentType == gu2::GLTFLoader::Accessor::ComponentType::FLOAT &&
+                        accessor.type == "VEC3") {
+                        printf("Adding POSITION, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
+                        mesh.addVertexAttribute(shaders->at(materialBuildInfo.vertexShaderId)
+                            .getInputVariableLayoutLocation("inPosition"),
+                            reinterpret_cast<gu2::Vec3f*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
+                            accessor.count, bufferView.byteStride);
+                    }
+                    else
+                        throw std::runtime_error("Unsupported attribute format for \"POSITION\"");
+                }
+                else if (attribute.name == "NORMAL") {
+                    if (accessor.componentType == gu2::GLTFLoader::Accessor::ComponentType::FLOAT &&
+                        accessor.type == "VEC3") {
+                        printf("Adding NORMAL, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
+                        mesh.addVertexAttribute(shaders->at(materialBuildInfo.vertexShaderId)
+                            .getInputVariableLayoutLocation("inNormal"),
+                            reinterpret_cast<gu2::Vec3f*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
+                            accessor.count, bufferView.byteStride);
+                    }
+                    else
+                        throw std::runtime_error("Unsupported attribute format for \"NORMAL\"");
+                }
+                else if (attribute.name == "TANGENT") {
+                    if (accessor.componentType == gu2::GLTFLoader::Accessor::ComponentType::FLOAT &&
+                        accessor.type == "VEC4") {
+                        printf("Adding TANGENT, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
+                        mesh.addVertexAttribute(shaders->at(materialBuildInfo.vertexShaderId)
+                            .getInputVariableLayoutLocation("inTangent"),
+                            reinterpret_cast<gu2::Vec4f*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
+                            accessor.count, bufferView.byteStride);
+                    }
+                    else
+                        throw std::runtime_error("Unsupported attribute format for \"TANGENT\"");
+                }
+                else if (attribute.name.substr(0, 9) == "TEXCOORD_") {
+                    int texCoordId = std::stoi(attribute.name.substr(9, 1));
+                    if (accessor.componentType == gu2::GLTFLoader::Accessor::ComponentType::FLOAT &&
+                        accessor.type == "VEC2") {
+                        printf("Adding %s, count: %lu stride: %lu\n", attribute.name.c_str(), accessor.count,
+                            bufferView.byteStride);
+                        mesh.addVertexAttribute(shaders->at(materialBuildInfo.vertexShaderId)
+                            .getInputVariableLayoutLocation("inTexCoord" + attribute.name.substr(9, 1)),
+                            reinterpret_cast<gu2::Vec2f*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
+                            accessor.count, bufferView.byteStride);
+                    }
+                    else
+                        throw std::runtime_error("Unsupported attribute format for \"TEXCOORD\"");
+                }
+            }
+
+            // Add indices
+            {
+                if (p.indices < 0)
+                    throw std::runtime_error("No accessor ID for indices defined");
+                auto& accessor = gltfLoader.getAccessors().at(p.indices);
+                if (accessor.bufferView < 0)
+                    throw std::runtime_error("No buffer view for indices defined");
+                auto& bufferView = gltfLoader.getBufferViews().at(accessor.bufferView);
+                if (bufferView.buffer < 0)
+                    throw std::runtime_error("No buffer for indices defined");
+                auto& buffer = gltfLoader.getBuffers().at(bufferView.buffer);
+                if (buffer.buffer == nullptr)
+                    throw std::runtime_error("No buffer loaded");
+
+                if (accessor.type != "SCALAR")
+                    throw std::runtime_error("Invalid accessor for indices, type not \"SCALAR\"");
+
+                printf("Adding indices, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
+                switch (accessor.componentType) {
+                    case gu2::GLTFLoader::Accessor::ComponentType::UNSIGNED_SHORT:
+                        mesh.setIndices(
+                            reinterpret_cast<uint16_t*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
+                            accessor.count, bufferView.byteStride);
+                        break;
+                    case gu2::GLTFLoader::Accessor::ComponentType::UNSIGNED_INT:
+                        mesh.setIndices(
+                            reinterpret_cast<uint32_t*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
+                            accessor.count, bufferView.byteStride);
+                        break;
+                    default:
+                        throw std::runtime_error("Invalid accessor for indices, component type not \"UNSIGNED_SHORT\" or \"UNSIGNED_INT\"");
+                }
+            }
+
+            mesh.upload(commandPool, queue);
+            mesh.createDescriptorSets(device, vulkanSettings.framesInFlight);
+
+            // Try to find pre-existing material with identical info, create new info if one is not found
+            int64_t meshMaterialId = -1;
+            for (int64_t i=0; i<materialBuildInfos.size(); ++i) {
+                if (materialBuildInfos[i] == materialBuildInfo)
+                    meshMaterialId = i;
+            }
+            if (meshMaterialId < 0) {
+                meshMaterialId = (int64_t)materialBuildInfos.size();
+                materialBuildInfo.vertexInputInfo = mesh.getVertexAttributesDescription()
+                    .getPipelineVertexInputStateCreateInfo(); // TODO doesn't feel very elegant of a solution
+                materialBuildInfos.push_back(std::move(materialBuildInfo));
+            }
+            meshMaterialIds.push_back(meshMaterialId);
+        }
+    }
+
+    assert(meshMaterialIds.size() == meshes->size());
+
+    materials->clear();
+    materials->reserve(materialBuildInfos.size());
+    for (const auto& materialBuildInfo : materialBuildInfos) {
+        materials->emplace_back(device);
+        auto& material = materials->back();
+
+        // Add shaders
+        material.setVertexShader(shaders->at(materialBuildInfo.vertexShaderId));
+        material.setFragmentShader(shaders->at(materialBuildInfo.fragmentShaderId));
+
+        // Add textures
+        if (materialBuildInfo.baseColorTextureId >= 0)
+            material.addTexture(textures->at(materialBuildInfo.baseColorTextureId));
+        if (materialBuildInfo.metallicRoughnessTextureId >= 0)
+            material.addTexture(textures->at(materialBuildInfo.metallicRoughnessTextureId));
+        if (materialBuildInfo.normalTextureId >= 0)
+            material.addTexture(textures->at(materialBuildInfo.normalTextureId));
+
+        material.createDescriptorSets(device, vulkanSettings.framesInFlight);
+
+        material.createPipeline(pipelineManager,
+            material.getDescriptorSetLayout(),
+            meshes->front().getDescriptorSetLayout(), // TODO hack, move all descriptor stuff out from mesh into material
+            materialBuildInfo.vertexInputInfo);
+    }
+
+    for (size_t i=0; i<meshes->size(); ++i) {
+        auto& mesh = meshes->at(i);
+        mesh.setMaterial(&materials->at(meshMaterialIds[i]));
+        printf("n. material textures for mesh %lu: %lu\n", i, mesh.getMaterial().getTextures().size());
+    }
+}
+
+
 class VulkanWindow : public gu2::Window<VulkanWindow> {
 public:
     VulkanWindow(const gu2::WindowSettings& windowSettings, const gu2::VulkanSettings& vulkanSettings) :
@@ -130,8 +484,9 @@ public:
         gu2::Mesh::destroyDescriptorResources(_vulkanDevice);
         _materials.clear();
         gu2::Material::destroyDescriptorResources(_vulkanDevice);
+        _shaders.clear();
         _textures.clear();
-        _pipelines.clear();
+        _pipelineManager.reset();
         _renderer.reset();
         vkDestroyDevice(_vulkanDevice, nullptr);
         if (_vulkanSettings.enableValidationLayers)
@@ -163,28 +518,20 @@ public:
         _renderer->createRenderPass();
         _renderer->createCommandPool();
 
-        // Shaders
-        gu2::Shader vertShader(_vulkanDevice), fragShader(_vulkanDevice);
-        vertShader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "vertex/pbr.glsl");
-        fragShader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "fragment/pbr.glsl");
+        _pipelineManager = std::make_unique<gu2::PipelineManager>();
+        gu2::PipelineSettings defaultPipelineSettings;
+        defaultPipelineSettings.device = _vulkanDevice;
+        defaultPipelineSettings.renderPass = _renderer->getRenderPass();
+        defaultPipelineSettings.swapChainExtent = _renderer->getSwapChainExtent();
+        _pipelineManager->setDefaultPipelineSettings(defaultPipelineSettings);
 
         // Load sponza (TODO move elsewhere)
         gu2::GLTFLoader sponzaLoader;
         sponzaLoader.readFromFile(gu2::Path(ASSETS_DIR) / "sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");
-        gu2::Material::createMaterialsFromGLTF(sponzaLoader, &_materials, &_textures, _vulkanSettings,
-            _vulkanPhysicalDevice, _vulkanDevice, _renderer->getCommandPool(), _vulkanGraphicsQueue);
-
         gu2::Mesh::createUniformBuffers(_vulkanPhysicalDevice, _vulkanDevice, _vulkanSettings.framesInFlight, 512); // TODO number of uniforms
-        gu2::Mesh::createMeshesFromGLTF(sponzaLoader, &_meshes, _materials,
-            _vulkanSettings, _vulkanPhysicalDevice, _vulkanDevice, _renderer->getCommandPool(), _vulkanGraphicsQueue);
-
-        gu2::Pipeline::Settings pipelineDefaultSettings;
-        pipelineDefaultSettings.device = _vulkanDevice;
-        pipelineDefaultSettings.renderPass = _renderer->getRenderPass();
-        pipelineDefaultSettings.swapChainExtent = _renderer->getSwapChainExtent();
-        pipelineDefaultSettings.vertShaderModule = vertShader.getShaderModule();
-        pipelineDefaultSettings.fragShaderModule = fragShader.getShaderModule();
-        gu2::Pipeline::createPipelines(pipelineDefaultSettings, &_pipelines, &_meshes);
+        createFromGLTF(sponzaLoader, &_meshes, &_materials, &_shaders, &_textures, _vulkanSettings,
+            _vulkanPhysicalDevice, _vulkanDevice, _renderer->getCommandPool(), _vulkanGraphicsQueue,
+            _pipelineManager.get());
 
         _scene.createFromGLFT(sponzaLoader, _meshes);
 
@@ -387,7 +734,6 @@ public:
 
         for (size_t nodeId=0; nodeId<_scene.nodes.size(); ++nodeId) {
             const auto& node = _scene.nodes[nodeId];
-            node.mesh->getPipeline().bind(commandBuffer);
             node.mesh->bind(commandBuffer);
             node.mesh->draw(commandBuffer, _renderer->getCurrentFrame(), nodeId);
         }
@@ -434,23 +780,24 @@ public:
     }
 
 private:
-    const gu2::VulkanSettings       _vulkanSettings;
+    const gu2::VulkanSettings               _vulkanSettings;
 
-    VkInstance                      _vulkanInstance;
-    VkDebugUtilsMessengerEXT        _vulkanDebugMessenger;
-    VkSurfaceKHR                    _vulkanSurface;
-    VkPhysicalDevice                _vulkanPhysicalDevice;
-    VkPhysicalDeviceProperties      _vulkanPhysicalDeviceProperties;
-    VkDevice                        _vulkanDevice;
-    VkQueue                         _vulkanGraphicsQueue;
-    VkQueue                         _vulkanPresentQueue;
+    VkInstance                              _vulkanInstance;
+    VkDebugUtilsMessengerEXT                _vulkanDebugMessenger;
+    VkSurfaceKHR                            _vulkanSurface;
+    VkPhysicalDevice                        _vulkanPhysicalDevice;
+    VkPhysicalDeviceProperties              _vulkanPhysicalDeviceProperties;
+    VkDevice                                _vulkanDevice;
+    VkQueue                                 _vulkanGraphicsQueue;
+    VkQueue                                 _vulkanPresentQueue;
 
-    std::unique_ptr<gu2::Renderer>  _renderer;
-    std::vector<gu2::Texture>       _textures;
-    std::vector<gu2::Material>      _materials;
-    std::vector<gu2::Mesh>          _meshes;
-    std::vector<gu2::Pipeline>      _pipelines;
-    gu2::Scene                      _scene;
+    std::unique_ptr<gu2::Renderer>          _renderer;
+    std::vector<gu2::Texture>               _textures;
+    std::vector<gu2::Shader>                _shaders;
+    std::vector<gu2::Material>              _materials;
+    std::vector<gu2::Mesh>                  _meshes;
+    std::unique_ptr<gu2::PipelineManager>   _pipelineManager;
+    gu2::Scene                              _scene;
 };
 
 

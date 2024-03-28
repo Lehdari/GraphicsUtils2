@@ -28,56 +28,54 @@ class Scene;
 class VulkanSettings;
 
 
+struct PipelineSettings {
+    VkDevice                                device                      {nullptr};
+
+    // Renderer info
+    VkRenderPass                            renderPass                  {nullptr};
+    VkExtent2D                              swapChainExtent;
+
+    // Shader modules
+    VkShaderModule                          vertShaderModule            {nullptr};
+    VkShaderModule                          fragShaderModule            {nullptr};
+
+    // Mesh / Material configuration
+    VkPipelineVertexInputStateCreateInfo    vertexInputInfo;
+    VkDescriptorSetLayout                   materialDescriptorSetLayout {nullptr};
+    VkDescriptorSetLayout                   meshDescriptorSetLayout     {nullptr};
+};
+
+
 class Pipeline {
 public:
-    struct Settings {
-        VkDevice                                device                      {nullptr};
-
-        // Renderer info
-        VkRenderPass                            renderPass                  {nullptr};
-        VkExtent2D                              swapChainExtent;
-
-        // Shader modules
-        VkShaderModule                          vertShaderModule            {nullptr};
-        VkShaderModule                          fragShaderModule            {nullptr};
-
-        // Mesh / Material configuration
-        VkPipelineVertexInputStateCreateInfo    vertexInputInfo;
-        VkDescriptorSetLayout                   materialDescriptorSetLayout {nullptr};
-        VkDescriptorSetLayout                   meshDescriptorSetLayout     {nullptr};
-    };
-
     // Creates the necessary pipelines and assigns them to meshes
     static void createPipelines(
-        const Settings& pipelineDefaultSettings, // mesh / material configuration will be overwritten
+        const PipelineSettings& pipelineDefaultSettings, // mesh / material configuration will be overwritten
         std::vector<Pipeline>* pipelines,
         std::vector<Mesh>* meshes
     );
 
-    Pipeline(const Settings& settings);
+    Pipeline(const PipelineSettings& settings = PipelineSettings());
     Pipeline(const Pipeline& pipeline) = delete;
     Pipeline(Pipeline&& pipeline) = default;
     Pipeline& operator=(const Pipeline& pipeline) = delete;
     Pipeline& operator=(Pipeline&& pipeline) = default;
     ~Pipeline();
 
-    void createGraphicsPipeline( // TODO can this be incorporated into the constructor?
-        VkShaderModule vertShaderModule,
-        VkShaderModule fragShaderModule,
-        VkPipelineVertexInputStateCreateInfo vertexInputInfo
-    );
+    void createGraphicsPipeline(VkShaderModule vertShaderModule, VkShaderModule fragShaderModule);
 
-    const Settings& getSettings() const;
+    const PipelineSettings& getSettings() const;
 
     void bind(VkCommandBuffer commandBuffer) const;
 
     friend class Mesh;
+    friend class Material;
 
 private:
-    Settings                        _settings;
+    PipelineSettings    _settings;
 
-    VkPipelineLayout                _pipelineLayout;
-    VkPipeline                      _graphicsPipeline;
+    VkPipelineLayout    _pipelineLayout;
+    VkPipeline          _graphicsPipeline;
 };
 
 

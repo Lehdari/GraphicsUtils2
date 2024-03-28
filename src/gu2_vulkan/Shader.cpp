@@ -11,8 +11,6 @@
 #include "Shader.hpp"
 #include "gu2_util/FileUtils.hpp"
 
-#include "spirv_reflect.h"
-
 
 using namespace gu2;
 
@@ -23,10 +21,44 @@ Shader::Shader(VkDevice device) :
 {
 }
 
+Shader::Shader(Shader&& other) :
+    _device             (other._device),
+    _macroDefinitions   (std::move(other._macroDefinitions)),
+    _filename           (std::move(other._filename)),
+    _spirv              (std::move(other._spirv)),
+    _shaderModule       (other._shaderModule)
+{
+    other._shaderModule = nullptr;
+
+    if (!_spirv.empty())
+        parseSpirvReflection();
+}
+
+Shader& Shader::operator=(Shader&& other)
+{
+    if (this == &other)
+        return *this;
+
+    _device = other._device;
+    _macroDefinitions = std::move(other._macroDefinitions);
+    _filename = std::move(other._filename);
+    _spirv = std::move(other._spirv);
+    _shaderModule = other._shaderModule;
+
+    other._shaderModule = nullptr;
+
+    if (!_spirv.empty())
+        parseSpirvReflection();
+
+    return *this;
+}
+
 Shader::~Shader()
 {
     if (_shaderModule != nullptr)
         vkDestroyShaderModule(_device, _shaderModule, nullptr);
+
+    spvReflectDestroyShaderModule(&_reflectionModule);
 }
 
 void Shader::addMacroDefinition(const std::string& name, const std::string& value)
@@ -58,6 +90,7 @@ void Shader::loadFromFile(const Path& filename, ShaderType type, bool optimize)
     }
 
     _spirv = { result.cbegin(), result.cend() };
+    parseSpirvReflection();
     _shaderModule = createShaderModule(_device, _spirv);
 }
 
@@ -66,46 +99,28 @@ const SpirvByteCode& Shader::getSpirvByteCode() const noexcept
     return _spirv;
 }
 
+const std::vector<SpvReflectInterfaceVariable*>& Shader::getInputVariables() const noexcept
+{
+    return _inputVariables;
+}
+
+const std::vector<SpvReflectDescriptorBinding*>& Shader::getDescriptorBindings() const noexcept
+{
+    return _descriptorBindings;
+}
+
+int64_t Shader::getInputVariableLayoutLocation(const std::string& inputVariableName) const noexcept
+{
+    for (const auto& inputVariable : _inputVariables) {
+        if (inputVariable->name == inputVariableName)
+            return inputVariable->location;
+    }
+    return -1;
+}
+
 VkShaderModule Shader::getShaderModule() const noexcept
 {
     return _shaderModule;
-}
-
-void Shader::reflectionTest()
-{
-    // Generate reflection data for a shader
-    SpvReflectShaderModule module;
-    SpvReflectResult result = spvReflectCreateShaderModule(_spirv.size() * sizeof(uint32_t), _spirv.data(), &module);
-    assert(result == SPV_REFLECT_RESULT_SUCCESS);
-
-    // Enumerate and extract shader's input variables
-    uint32_t nVars = 0;
-    result = spvReflectEnumerateInputVariables(&module, &nVars, nullptr);
-    assert(result == SPV_REFLECT_RESULT_SUCCESS);
-    std::vector<SpvReflectInterfaceVariable*> inputVars(nVars);
-    result = spvReflectEnumerateInputVariables(&module, &nVars, inputVars.data());
-    assert(result == SPV_REFLECT_RESULT_SUCCESS);
-
-    uint32_t nBindings = 0;
-    result = spvReflectEnumerateDescriptorBindings(&module, &nBindings, nullptr);
-    assert(result == SPV_REFLECT_RESULT_SUCCESS);
-    std::vector<SpvReflectDescriptorBinding*> descriptorBindings(nBindings);
-    result = spvReflectEnumerateDescriptorBindings(&module, &nBindings, descriptorBindings.data());
-    assert(result == SPV_REFLECT_RESULT_SUCCESS);
-
-    // Output variables, descriptor bindings, descriptor sets, and push constants
-    // can be enumerated and extracted using a similar mechanism.
-
-    for (auto* inputVar : inputVars) {
-        printf("Input var: %s\n", inputVar->name);
-    }
-
-    for (auto* descriptorBinding : descriptorBindings) {
-        printf("Descriptor binding: %s\n", descriptorBinding->name);
-    }
-
-    // Destroy the reflection data when no longer required.
-    spvReflectDestroyShaderModule(&module);
 }
 
 VkShaderModule Shader::createShaderModule(VkDevice device, const SpirvByteCode& code)
@@ -121,4 +136,28 @@ VkShaderModule Shader::createShaderModule(VkDevice device, const SpirvByteCode& 
     }
 
     return shaderModule;
+}
+
+void Shader::parseSpirvReflection()
+{
+    // Generate reflection data for a shader
+    SpvReflectResult result = spvReflectCreateShaderModule(_spirv.size() * sizeof(uint32_t), _spirv.data(),
+        &_reflectionModule);
+    assert(result == SPV_REFLECT_RESULT_SUCCESS);
+
+    // Enumerate and extract shader's input variables
+    uint32_t nVars = 0;
+    result = spvReflectEnumerateInputVariables(&_reflectionModule, &nVars, nullptr);
+    assert(result == SPV_REFLECT_RESULT_SUCCESS);
+    _inputVariables.resize(nVars);
+    result = spvReflectEnumerateInputVariables(&_reflectionModule, &nVars, _inputVariables.data());
+    assert(result == SPV_REFLECT_RESULT_SUCCESS);
+
+    // Enumerate and extract shader's descriptor bindings
+    uint32_t nBindings = 0;
+    result = spvReflectEnumerateDescriptorBindings(&_reflectionModule, &nBindings, nullptr);
+    assert(result == SPV_REFLECT_RESULT_SUCCESS);
+    _descriptorBindings.resize(nBindings);
+    result = spvReflectEnumerateDescriptorBindings(&_reflectionModule, &nBindings, _descriptorBindings.data());
+    assert(result == SPV_REFLECT_RESULT_SUCCESS);
 }

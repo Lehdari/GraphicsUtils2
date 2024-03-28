@@ -14,6 +14,7 @@
 #include "gu2_util/Typedef.hpp"
 
 #include <shaderc/shaderc.hpp>
+#include <spirv_reflect.h>
 #include <vulkan/vulkan.h>
 
 
@@ -28,9 +29,9 @@ class Shader {
 public:
     Shader(VkDevice device = nullptr);
     Shader(const Shader&) = delete;
-    Shader(Shader&&) = default;
+    Shader(Shader&&);
     Shader& operator=(const Shader&) = delete;
-    Shader& operator=(Shader&&) = default;
+    Shader& operator=(Shader&&);
     ~Shader();
 
     void addMacroDefinition(const std::string& name, const std::string& value);
@@ -41,18 +42,30 @@ public:
         bool optimize = false);
 
     const SpirvByteCode& getSpirvByteCode() const noexcept;
-    VkShaderModule getShaderModule() const noexcept;
+    const std::vector<SpvReflectInterfaceVariable*>& getInputVariables() const noexcept;
+    const std::vector<SpvReflectDescriptorBinding*>& getDescriptorBindings() const noexcept;
 
-    void reflectionTest();
+    int64_t getInputVariableLayoutLocation(const std::string& inputVariableName) const noexcept;
+
+    VkShaderModule getShaderModule() const noexcept;
 
     static VkShaderModule createShaderModule(VkDevice device, const SpirvByteCode& code);
 
 private:
-    VkDevice        _device;
-    Path            _filename;
-    SpirvByteCode   _spirv; // SPIR-V bytecode
-    VkShaderModule  _shaderModule;
-    std::vector<std::pair<std::string, std::string>>    _macroDefinitions; // TODO tidy up (use struct instead of pair)
+    using MacroDefinitionList = std::vector<std::pair<std::string, std::string>>; // TODO tidy up (use struct instead of pair)
+
+    VkDevice            _device;
+    MacroDefinitionList _macroDefinitions;
+    Path                _filename;
+    SpirvByteCode       _spirv; // SPIR-V bytecode
+    VkShaderModule      _shaderModule;
+
+    // SPIR-V reflection data
+    SpvReflectShaderModule                      _reflectionModule;
+    std::vector<SpvReflectInterfaceVariable*>   _inputVariables;
+    std::vector<SpvReflectDescriptorBinding*>   _descriptorBindings;
+
+    void parseSpirvReflection();
 };
 
 

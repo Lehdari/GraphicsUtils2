@@ -9,6 +9,7 @@
 //
 
 #include "Material.hpp"
+#include "PipelineManager.hpp"
 #include "Texture.hpp"
 #include "VulkanSettings.hpp"
 
@@ -66,25 +67,49 @@ void Material::createMaterialsFromGLTF(
         auto& material = materials->back();
 
         // Add textures
-        if (m.pbrMetallicRoughness.baseColorTexture.index >= 0)
-            material.addTexture(textures->at(m.pbrMetallicRoughness.baseColorTexture.index));
-        if (m.pbrMetallicRoughness.metallicRoughnessTexture.index >= 0)
-            material.addTexture(textures->at(m.pbrMetallicRoughness.metallicRoughnessTexture.index));
-        if (m.normalTexture.index >= 0)
-            material.addTexture(textures->at(m.normalTexture.index));
+        if (m.pbrMetallicRoughness.baseColorTexture.index >= 0) { printf("B ");
+            material.addTexture(textures->at(m.pbrMetallicRoughness.baseColorTexture.index)); }
+        if (m.pbrMetallicRoughness.metallicRoughnessTexture.index >= 0) {  printf("M ");
+            material.addTexture(textures->at(m.pbrMetallicRoughness.metallicRoughnessTexture.index)); }
+        if (m.normalTexture.index >= 0) {  printf("N");
+            material.addTexture(textures->at(m.normalTexture.index)); }
+        printf("\n");
 
         material.createDescriptorSets(device, vulkanSettings.framesInFlight);
     }
 }
 
 Material::Material(VkDevice device) :
-    _device (device)
+    _device         (device),
+    _vertexShader   (nullptr),
+    _fragmentShader (nullptr),
+    _pipeline       (nullptr)
 {
+}
+
+void Material::setVertexShader(const Shader& shader)
+{
+    _vertexShader = &shader;
+}
+
+void Material::setFragmentShader(const Shader& shader)
+{
+    _fragmentShader = &shader;
 }
 
 void Material::addTexture(const Texture& texture)
 {
     _textures.emplace_back(&texture);
+}
+
+void Material::createPipeline(
+    PipelineManager* pipelineManager,
+    VkDescriptorSetLayout materialDescriptorSetLayout,
+    VkDescriptorSetLayout meshDescriptorSetLayout,
+    const VkPipelineVertexInputStateCreateInfo& vertexInputInfo
+) {
+    _pipeline = pipelineManager->getPipeline(_vertexShader, _fragmentShader, materialDescriptorSetLayout,
+        meshDescriptorSetLayout, vertexInputInfo);
 }
 
 void Material::createDescriptorSets(VkDevice device, int framesInFlight)
@@ -141,11 +166,12 @@ VkDescriptorSetLayout Material::getDescriptorSetLayout() const
 
 void Material::bind(
     VkCommandBuffer commandBuffer,
-    const VkPipelineLayout& pipelineLayout,
     uint32_t currentFrame
 ) const
 {
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,
+    _pipeline->bind(commandBuffer);
+
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline->_pipelineLayout, 0, 1,
         &_descriptorSets[currentFrame], 0, nullptr);
 }
 

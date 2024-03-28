@@ -349,16 +349,20 @@ void Mesh::draw(
     uint32_t currentFrame,
     uint32_t uniformId
 ) const {
+    if (_material == nullptr) return;
+
     if (_material != nullptr && _material->_textures.size() != 3) // TODO obviously subject to removal once shaders are quaranteed have matching number of textures
         return;
 
-    uint32_t offset = uniformId * padUniformBufferSize(_physicalDeviceProperties, sizeof(gu2::UniformBufferObject));
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline->_pipelineLayout, 1, 1,
-        &_descriptorSets[currentFrame], 1, &offset);
-
     // Bind material
     if (_material != nullptr)
-        _material->bind(commandBuffer, _pipeline->_pipelineLayout, currentFrame);
+        _material->bind(commandBuffer, currentFrame);
+
+    auto pipelineLayout = _material->_pipeline->_pipelineLayout;
+
+    uint32_t offset = uniformId * padUniformBufferSize(_physicalDeviceProperties, sizeof(gu2::UniformBufferObject));
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1,
+        &_descriptorSets[currentFrame], 1, &offset);
 
     vkCmdDrawIndexed(commandBuffer, _nIndices, 1, 0, 0, 0);
 }

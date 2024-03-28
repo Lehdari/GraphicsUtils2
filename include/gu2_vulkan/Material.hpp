@@ -20,6 +20,9 @@ namespace gu2 {
 
 
 class GLTFLoader;
+class Pipeline;
+class PipelineManager;
+class Shader;
 class Texture;
 class VulkanSettings;
 
@@ -39,7 +42,19 @@ public:
 
     Material(VkDevice device); // TODO introduce Material::Settings
 
+    void setVertexShader(const Shader& shader);
+    void setFragmentShader(const Shader& shader);
+
     void addTexture(const Texture& texture);
+    inline const std::vector<const Texture*>& getTextures() const { return _textures; }
+
+    void createPipeline(
+        PipelineManager* pipelineManager,
+        VkDescriptorSetLayout materialDescriptorSetLayout,
+        VkDescriptorSetLayout meshDescriptorSetLayout,
+        const VkPipelineVertexInputStateCreateInfo& vertexInputInfo);
+
+    inline const Pipeline* getPipeline() const noexcept { return _pipeline; }
 
     // Called after all textures have been added
     void createDescriptorSets(VkDevice device, int framesInFlight);
@@ -48,7 +63,6 @@ public:
 
     void bind(
         VkCommandBuffer commandBuffer,
-        const VkPipelineLayout& pipelineLayout,
         uint32_t currentFrame
     ) const;
 
@@ -68,7 +82,10 @@ private:
     static const VkDescriptorSetLayout& getTextureDescriptorSetLayout(VkDevice device, int32_t nTextures);
 
     VkDevice                        _device;
+    const Shader*                   _vertexShader;
+    const Shader*                   _fragmentShader;
     std::vector<const Texture*>     _textures;
+    const Pipeline*                 _pipeline;
     std::vector<VkDescriptorSet>    _descriptorSets;
 };
 

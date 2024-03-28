@@ -4,7 +4,9 @@
 layout(location = 0) in vec3 fragNormal;
 layout(location = 1) in vec4 fragTangent;
 layout(location = 2) in vec2 fragTexCoord0;
+#ifndef DISABLE_IN_TEX_COORD_1
 layout(location = 3) in vec2 fragTexCoord1;
+#endif
 
 layout(location = 0) out vec4 outColor;
 
@@ -33,5 +35,9 @@ void main() {
 
     // TODO proper pbr shading
 
+    #ifndef DISABLE_BASE_COLOR
     outColor = vec4(baseColor, 1.0);
+    #else
+    outColor = vec4(1.0, 1.0, 1.0, 1.0);
+    #endif
 }

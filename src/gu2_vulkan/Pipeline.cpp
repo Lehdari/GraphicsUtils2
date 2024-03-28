@@ -22,7 +22,7 @@ using namespace gu2;
 
 
 void Pipeline::createPipelines(
-    const Pipeline::Settings& pipelineDefaultSettings,
+    const PipelineSettings& pipelineDefaultSettings,
     std::vector<Pipeline>* pipelines,
     std::vector<Mesh>* meshes
 ) {
@@ -43,20 +43,19 @@ void Pipeline::createPipelines(
         }
 
         // No matching pipeline found, create a new one
-        Settings newSettings = pipelineDefaultSettings;
+        PipelineSettings newSettings = pipelineDefaultSettings;
         newSettings.vertexInputInfo = mesh.getVertexAttributesDescription().getPipelineVertexInputStateCreateInfo();
         newSettings.materialDescriptorSetLayout = materialDescriptorSetLayout;
         newSettings.meshDescriptorSetLayout = meshDescriptorSetLayout;
         pipelines->emplace_back(newSettings);
         auto& pipeline = pipelines->back();
-        pipeline.createGraphicsPipeline(newSettings.vertShaderModule, newSettings.fragShaderModule,
-            newSettings.vertexInputInfo);
+        pipeline.createGraphicsPipeline(newSettings.vertShaderModule, newSettings.fragShaderModule);
         mesh.setPipeline(&(pipelines->back())); // TODO ensure that the pipeline vector cannot get invalidated
     }
 }
 
 
-Pipeline::Pipeline(const Settings& settings) :
+Pipeline::Pipeline(const PipelineSettings& settings) :
     _settings           (settings),
     _pipelineLayout     (nullptr),
     _graphicsPipeline   (nullptr)
@@ -69,11 +68,8 @@ Pipeline::~Pipeline()
     vkDestroyPipelineLayout(_settings.device, _pipelineLayout, nullptr);
 }
 
-void Pipeline::createGraphicsPipeline(
-    VkShaderModule vertShaderModule,
-    VkShaderModule fragShaderModule,
-    VkPipelineVertexInputStateCreateInfo vertexInputInfo
-) {
+void Pipeline::createGraphicsPipeline(VkShaderModule vertShaderModule, VkShaderModule fragShaderModule)
+{
     VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
     vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -199,7 +195,7 @@ void Pipeline::createGraphicsPipeline(
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.stageCount = 2;
     pipelineInfo.pStages = shaderStages;
-    pipelineInfo.pVertexInputState = &vertexInputInfo;
+    pipelineInfo.pVertexInputState = &_settings.vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
     pipelineInfo.pViewportState = &viewportState;
     pipelineInfo.pRasterizationState = &rasterizer;
@@ -218,7 +214,7 @@ void Pipeline::createGraphicsPipeline(
     }
 }
 
-const Pipeline::Settings& Pipeline::getSettings() const
+const PipelineSettings& Pipeline::getSettings() const
 {
     return _settings;
 }
