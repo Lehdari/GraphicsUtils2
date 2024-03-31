@@ -49,7 +49,9 @@ In `build/` directory:
 ```
 src/demos/demo_vulkan_triangle
 src/demos/demo_vulkan_box
+src/demos/demo_vulkan_sponza
 ```
+(Note that `demo_vulkan_sponza` requires downloading the Intel sponza via `assets/sponza/download_sponza.sh`)
 
 ## Run Tests
 
