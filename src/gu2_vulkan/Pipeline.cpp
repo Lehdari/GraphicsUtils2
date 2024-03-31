@@ -15,44 +15,8 @@
 #include "Texture.hpp"
 #include "VulkanSettings.hpp"
 
-#include <array>
-
 
 using namespace gu2;
-
-
-void Pipeline::createPipelines(
-    const PipelineSettings& pipelineDefaultSettings,
-    std::vector<Pipeline>* pipelines,
-    std::vector<Mesh>* meshes
-) {
-    pipelines->clear();
-    pipelines->reserve(meshes->size()); // TODO this is horrible but ensures that pointers stay valid below
-    for (auto& mesh : *meshes) {
-        auto meshDescriptorSetLayout = mesh.getDescriptorSetLayout();
-        auto materialDescriptorSetLayout = mesh.getMaterial().getDescriptorSetLayout();
-
-        // Try to find a pre-existing pipeline that matches the descriptor set layouts
-        for (const auto& pipeline : *pipelines) {
-            auto pipelineSettings = pipeline.getSettings();
-            if (pipelineSettings.meshDescriptorSetLayout == meshDescriptorSetLayout && // is comparing the handles enough?
-                pipelineSettings.materialDescriptorSetLayout == materialDescriptorSetLayout) {
-                // Matching pipeline found, use it
-                mesh.setPipeline(&pipeline);
-            }
-        }
-
-        // No matching pipeline found, create a new one
-        PipelineSettings newSettings = pipelineDefaultSettings;
-        newSettings.vertexInputInfo = mesh.getVertexAttributesDescription().getPipelineVertexInputStateCreateInfo();
-        newSettings.materialDescriptorSetLayout = materialDescriptorSetLayout;
-        newSettings.meshDescriptorSetLayout = meshDescriptorSetLayout;
-        pipelines->emplace_back(newSettings);
-        auto& pipeline = pipelines->back();
-        pipeline.createGraphicsPipeline(newSettings.vertShaderModule, newSettings.fragShaderModule);
-        mesh.setPipeline(&(pipelines->back())); // TODO ensure that the pipeline vector cannot get invalidated
-    }
-}
 
 
 Pipeline::Pipeline(const PipelineSettings& settings) :
@@ -167,11 +131,9 @@ void Pipeline::createGraphicsPipeline(VkShaderModule vertShaderModule, VkShaderM
     colorBlending.blendConstants[3] = 0.0f; // Optional
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-    std::array<VkDescriptorSetLayout, 2> descriptorSetLayouts {
-        _settings.materialDescriptorSetLayout, _settings.meshDescriptorSetLayout};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 2;
-    pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
+    pipelineLayoutInfo.setLayoutCount = _settings.descriptorSetLayouts.size();
+    pipelineLayoutInfo.pSetLayouts = _settings.descriptorSetLayouts.data();
     pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
     pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
@@ -212,11 +174,6 @@ void Pipeline::createGraphicsPipeline(VkShaderModule vertShaderModule, VkShaderM
     if (vkCreateGraphicsPipelines(_settings.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &_graphicsPipeline) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create graphics pipeline!");
     }
-}
-
-const PipelineSettings& Pipeline::getSettings() const
-{
-    return _settings;
 }
 
 void Pipeline::bind(VkCommandBuffer commandBuffer) const

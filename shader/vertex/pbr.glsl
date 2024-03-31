@@ -16,7 +16,7 @@ layout(location = 2) out vec2 fragTexCoord0;
 layout(location = 3) out vec2 fragTexCoord1;
 #endif
 
-layout(set = 1, binding = 0) uniform UniformBufferObject { // TODO 1 is the object descriptor set id for now (will be 3)
+layout(set = 3, binding = 0) uniform UniformBufferObject {
     mat4 model;
     mat4 view;
     mat4 projection;

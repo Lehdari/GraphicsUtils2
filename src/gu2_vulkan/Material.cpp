@@ -9,6 +9,7 @@
 //
 
 #include "Material.hpp"
+#include "DescriptorManager.hpp"
 #include "PipelineManager.hpp"
 #include "Texture.hpp"
 #include "VulkanSettings.hpp"
@@ -20,64 +21,6 @@
 
 using namespace gu2;
 
-
-std::unordered_map<int32_t, VkDescriptorSetLayout>  Material::_descriptorSetLayouts;
-VkDescriptorPool                                    Material::_descriptorPool        {nullptr};
-
-
-void Material::createMaterialsFromGLTF(
-    const GLTFLoader& gltfLoader,
-    std::vector<Material>* materials,
-    std::vector<Texture>* textures,
-    const VulkanSettings& vulkanSettings,
-    VkPhysicalDevice physicalDevice,
-    VkDevice device,
-    VkCommandPool commandPool,
-    VkQueue queue
-) {
-    auto& gltfMaterials = gltfLoader.getMaterials();
-    materials->clear();
-    materials->reserve(gltfMaterials.size());
-
-    auto& gltfTextures = gltfLoader.getTextures();
-    auto nTextures = gltfTextures.size();
-    textures->clear();
-    for (const auto& t : gltfTextures)
-        textures->emplace_back(physicalDevice, device);
-
-    auto& gltfImages = gltfLoader.getImages();
-
-    #pragma omp parallel for
-    for (decltype(nTextures) i=0; i<nTextures; ++i) {
-        const auto& t = gltfTextures[i];
-        if (t.source < 0)
-            throw std::runtime_error("Texture source not defined");
-
-        const auto& imageFilename = gltfImages.at(t.source).filename;
-
-        auto& texture = textures->at(i);
-        texture.loadFromFile(commandPool, queue, imageFilename);
-
-        printf("Added texture %u / %lu from %s\n", i, nTextures, GU2_PATH_TO_STRING(imageFilename));
-        fflush(stdout);
-    }
-
-    for (const auto& m : gltfMaterials) {
-        materials->emplace_back(device);
-        auto& material = materials->back();
-
-        // Add textures
-        if (m.pbrMetallicRoughness.baseColorTexture.index >= 0) { printf("B ");
-            material.addTexture(textures->at(m.pbrMetallicRoughness.baseColorTexture.index)); }
-        if (m.pbrMetallicRoughness.metallicRoughnessTexture.index >= 0) {  printf("M ");
-            material.addTexture(textures->at(m.pbrMetallicRoughness.metallicRoughnessTexture.index)); }
-        if (m.normalTexture.index >= 0) {  printf("N");
-            material.addTexture(textures->at(m.normalTexture.index)); }
-        printf("\n");
-
-        material.createDescriptorSets(device, vulkanSettings.framesInFlight);
-    }
-}
 
 Material::Material(VkDevice device) :
     _device         (device),
@@ -97,71 +40,158 @@ void Material::setFragmentShader(const Shader& shader)
     _fragmentShader = &shader;
 }
 
-void Material::addTexture(const Texture& texture)
+void mergeBindings(DescriptorSetLayoutInfo* dest, const DescriptorSetLayoutInfo& src)
 {
-    _textures.emplace_back(&texture);
+    for (const auto& srcBinding : src.bindings) {
+        for (auto destIter = dest->bindings.begin(); destIter != dest->bindings.end(); ++destIter) {
+            auto& destBinding = *destIter;
+            if (srcBinding.binding == destBinding.binding) {
+                if (srcBinding.descriptorType != destBinding.descriptorType) {
+                    throw std::runtime_error("Incompatible shader stages: Different descriptor types for set = "
+                        + std::to_string(dest->setId) + ", binding = " + std::to_string(srcBinding.binding));
+                }
+                if (srcBinding.descriptorCount != destBinding.descriptorCount) {
+                    throw std::runtime_error("Incompatible shader stages: Different descriptor counts for set = "
+                        + std::to_string(dest->setId) + ", binding = " + std::to_string(srcBinding.binding));
+                }
+            }
+            destIter = dest->bindings.insert(dest->bindings.end(), srcBinding);
+        }
+    }
+
+    dest->createInfo.bindingCount = dest->bindings.size();
+}
+
+void Material::createDescriptorSetLayouts(DescriptorManager* descriptorManager)
+{
+    if (descriptorManager->getDevice() != _device)
+        throw std::runtime_error("DescriptorManager with different Vulkan device provided");
+
+    // TODO make _shaders a member and add generic interface for adding arbitrary number of shaders
+    std::vector<const Shader*> _shaders{_vertexShader, _fragmentShader};
+
+    // Merge descriptor set layouts from all shader stages
+    std::vector<DescriptorSetLayoutInfo> descriptorSetLayoutInfos;
+    for (auto* shader : _shaders) {
+        auto shaderDescriptorSetLayouts = shader->getDescriptorSetLayouts();
+        for (const auto& shaderDescriptorSetLayout : shaderDescriptorSetLayouts) {
+            // Try to find existing layout with the same id, merge binding info if one is found
+            bool matchingSetLayoutFound = false;
+            for (auto& descriptorSetLayoutInfo : descriptorSetLayoutInfos) {
+                if (descriptorSetLayoutInfo.setId == shaderDescriptorSetLayout.setId) {
+                    mergeBindings(&descriptorSetLayoutInfo, shaderDescriptorSetLayout);
+                    matchingSetLayoutFound = true;
+                    break;
+                }
+            }
+            if (!matchingSetLayoutFound) {
+                descriptorSetLayoutInfos.emplace_back(shaderDescriptorSetLayout);
+            }
+        }
+    }
+
+    // Create padded list of descriptor set layout infos (preserve order and fill unused sets with dummies, as per
+    // https://github.com/KhronosGroup/Vulkan-Docs/issues/1372)
+    uint32_t maxLayoutSetId = 0;
+    for (const auto& descriptorSetLayoutInfo : descriptorSetLayoutInfos) {
+        if (descriptorSetLayoutInfo.setId > maxLayoutSetId)
+            maxLayoutSetId = descriptorSetLayoutInfo.setId;
+    }
+    _descriptorSetLayoutInfos.clear();
+    for (uint32_t i=0; i<=maxLayoutSetId; ++i) {
+        _descriptorSetLayoutInfos.emplace_back();
+        auto& descriptorSetLayoutInfo = _descriptorSetLayoutInfos.back();
+        descriptorSetLayoutInfo.setId = i;
+        descriptorSetLayoutInfo.createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptorSetLayoutInfo.createInfo.pNext = nullptr;
+        descriptorSetLayoutInfo.createInfo.flags = 0;
+        descriptorSetLayoutInfo.createInfo.bindingCount = 0;
+        descriptorSetLayoutInfo.createInfo.pBindings = nullptr;
+    }
+    for (const auto& descriptorSetLayoutInfo : descriptorSetLayoutInfos) {
+        _descriptorSetLayoutInfos[descriptorSetLayoutInfo.setId] = descriptorSetLayoutInfo;
+    }
+
+    // TODO replace this hack that turns object descriptor UBO types to dynamic
+    for (auto& binding : _descriptorSetLayoutInfos.at(objectDescriptorSetId).bindings) {
+        if (binding.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+            binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    }
+
+    // Create new layouts
+    _descriptorSetLayouts.reserve(_descriptorSetLayoutInfos.size());
+    for (const auto& descriptorSetLayoutInfo : _descriptorSetLayoutInfos) {
+        _descriptorSetLayouts.emplace_back(descriptorManager->getDescriptorSetLayout(descriptorSetLayoutInfo));
+    }
 }
 
 void Material::createPipeline(
     PipelineManager* pipelineManager,
-    VkDescriptorSetLayout materialDescriptorSetLayout,
-    VkDescriptorSetLayout meshDescriptorSetLayout,
     const VkPipelineVertexInputStateCreateInfo& vertexInputInfo
 ) {
-    _pipeline = pipelineManager->getPipeline(_vertexShader, _fragmentShader, materialDescriptorSetLayout,
-        meshDescriptorSetLayout, vertexInputInfo);
+    _pipeline = pipelineManager->getPipeline(_vertexShader, _fragmentShader, _descriptorSetLayouts, vertexInputInfo);
 }
 
-void Material::createDescriptorSets(VkDevice device, int framesInFlight)
+void Material::addUniform(uint32_t set, uint32_t binding, const Texture& texture)
 {
-    auto& textureLayout = getTextureDescriptorSetLayout(device, static_cast<int32_t>(_textures.size()));
+    // TODO add check for layout correctness (set, binding, type) (_descriptorSetLayoutInfos)
+    _textures.emplace_back(set, binding, &texture);
+}
 
-    // Allocate descriptor pools
-    if (_descriptorPool == nullptr)
-        createDescriptorPool(device, framesInFlight, 512); // TODO do something about the n. of maximum sets
+void Material::createDescriptorSets(DescriptorManager* descriptorManager, int framesInFlight)
+{
+    // Allocate descriptor sets
+    _descriptorSets.clear();
+    descriptorManager->allocateDescriptorSets(&_descriptorSets,
+        _descriptorSetLayouts.at(materialDescriptorSetId),
+        framesInFlight
+    );
 
-    // Allocate texture descriptor sets
-    std::vector<VkDescriptorSetLayout> textureLayouts(framesInFlight, textureLayout);
-    VkDescriptorSetAllocateInfo textureAllocInfo{};
-    textureAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    textureAllocInfo.descriptorPool = _descriptorPool;
-    textureAllocInfo.descriptorSetCount = static_cast<uint32_t>(framesInFlight);
-    textureAllocInfo.pSetLayouts = textureLayouts.data();
-    _descriptorSets.resize(framesInFlight);
-    if (vkAllocateDescriptorSets(device, &textureAllocInfo, _descriptorSets.data()) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to allocate descriptor sets!");
+    // Fill out descriptor binding data
+    auto nTextures = _textures.size();
+    std::vector<VkDescriptorImageInfo> imageInfos(nTextures);
+    for (decltype(nTextures) i=0; i<nTextures; ++i) {
+        const auto& texture = *_textures[i].data;
+
+        imageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfos[i].imageView = texture.getImageView();
+        imageInfos[i].sampler = texture.getSampler();
     }
 
-    for (size_t i = 0; i < framesInFlight; i++) {
-        auto nTextures = _textures.size();
-        std::vector<VkWriteDescriptorSet> descriptorWrites;
-        descriptorWrites.reserve(_textures.size());
-        std::vector<VkDescriptorImageInfo> imageInfos(nTextures);
-        for (decltype(nTextures) j=0; j<nTextures; ++j) {
-            const auto& texture = _textures[j];
+    // Create descriptor write structs
+    std::vector<VkWriteDescriptorSet> descriptorWrites;
+    for (size_t i=0; i<framesInFlight; i++) {
+        const auto& layoutInfo = _descriptorSetLayoutInfos.at(materialDescriptorSetId); // 2 is the descriptor set dedicated for material properties
+
+        for (const auto& binding : layoutInfo.bindings) {
             descriptorWrites.emplace_back();
             auto& descriptorWrite = descriptorWrites.back();
 
-            imageInfos[j].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            imageInfos[j].imageView = texture->getImageView();
-            imageInfos[j].sampler = texture->getSampler();
-
             descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             descriptorWrite.dstSet = _descriptorSets[i];
-            descriptorWrite.dstBinding = j;
+            descriptorWrite.dstBinding = binding.binding;
             descriptorWrite.dstArrayElement = 0;
-            descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             descriptorWrite.descriptorCount = 1;
-            descriptorWrite.pImageInfo = &imageInfos[j];
-        }
-        vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()),
-            descriptorWrites.data(), 0, nullptr);
-    }
-}
 
-VkDescriptorSetLayout Material::getDescriptorSetLayout() const
-{
-    return getTextureDescriptorSetLayout(_device, static_cast<int32_t>(_textures.size()));
+            bool descriptorDataFound = false;
+            for (decltype(nTextures) k=0; k<nTextures; ++k) {
+                const auto& texture = _textures[k];
+                if (texture.set == layoutInfo.setId && texture.binding == binding.binding) {
+                    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                    descriptorWrite.pImageInfo = &imageInfos.at(k);
+                    descriptorDataFound = true;
+                    break;
+                }
+            }
+
+            if (!descriptorDataFound)
+                throw std::runtime_error("No descriptor data found for set = " + std::to_string(layoutInfo.setId)
+                    + ", binding = " + std::to_string(binding.binding));
+        }
+    }
+
+    vkUpdateDescriptorSets(_device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(),
+        0, nullptr);
 }
 
 void Material::bind(
@@ -171,63 +201,6 @@ void Material::bind(
 {
     _pipeline->bind(commandBuffer);
 
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline->_pipelineLayout, 0, 1,
-        &_descriptorSets[currentFrame], 0, nullptr);
-}
-
-void Material::createDescriptorPool(VkDevice device, int framesInFlight, uint32_t maxSets)
-{
-    VkDescriptorPoolSize poolSize;
-    poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSize.descriptorCount = static_cast<uint32_t>(maxSets * framesInFlight);
-
-    VkDescriptorPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
-    poolInfo.maxSets = static_cast<uint32_t>(maxSets * framesInFlight);
-
-    if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &_descriptorPool) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create descriptor pool!");
-    }
-}
-
-void Material::destroyDescriptorResources(VkDevice device)
-{
-    if (_descriptorPool != nullptr)
-        vkDestroyDescriptorPool(device, _descriptorPool, nullptr);
-    for (const auto& [nTextures, layout] : _descriptorSetLayouts)
-        vkDestroyDescriptorSetLayout(device, layout, nullptr);
-}
-
-const VkDescriptorSetLayout& Material::getTextureDescriptorSetLayout(VkDevice device, int32_t nTextures)
-{
-    if (!_descriptorSetLayouts.contains(nTextures)) {
-        auto& layout = _descriptorSetLayouts[nTextures];
-
-        // TODO Investigate using an array of textures instead of discrete bindings, see
-        // https://kylehalladay.com/blog/tutorial/vulkan/2018/01/28/Textue-Arrays-Vulkan.html
-
-        std::vector<VkDescriptorSetLayoutBinding> bindings(nTextures);
-        for (int32_t i=0; i<nTextures; ++i) {
-            bindings[i].binding = static_cast<uint32_t>(i);
-            bindings[i].descriptorCount = 1;
-            bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            bindings[i].pImmutableSamplers = nullptr;
-            bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        }
-
-        VkDescriptorSetLayoutCreateInfo layoutInfo{};
-        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-        layoutInfo.pBindings = bindings.data();
-
-        if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &layout) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create descriptor set layout!");
-        }
-
-        printf("Created DescriptorSetLayout for %d textures\n", nTextures);
-    }
-
-    return _descriptorSetLayouts.at(nTextures);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline->getPipelineLayout(),
+        materialDescriptorSetId, 1, &_descriptorSets[currentFrame], 0, nullptr);
 }

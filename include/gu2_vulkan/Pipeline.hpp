@@ -41,20 +41,12 @@ struct PipelineSettings {
 
     // Mesh / Material configuration
     VkPipelineVertexInputStateCreateInfo    vertexInputInfo;
-    VkDescriptorSetLayout                   materialDescriptorSetLayout {nullptr};
-    VkDescriptorSetLayout                   meshDescriptorSetLayout     {nullptr};
+    std::vector<VkDescriptorSetLayout>      descriptorSetLayouts;
 };
 
 
 class Pipeline {
 public:
-    // Creates the necessary pipelines and assigns them to meshes
-    static void createPipelines(
-        const PipelineSettings& pipelineDefaultSettings, // mesh / material configuration will be overwritten
-        std::vector<Pipeline>* pipelines,
-        std::vector<Mesh>* meshes
-    );
-
     Pipeline(const PipelineSettings& settings = PipelineSettings());
     Pipeline(const Pipeline& pipeline) = delete;
     Pipeline(Pipeline&& pipeline) = default;
@@ -64,12 +56,10 @@ public:
 
     void createGraphicsPipeline(VkShaderModule vertShaderModule, VkShaderModule fragShaderModule);
 
-    const PipelineSettings& getSettings() const;
+    inline const PipelineSettings& getSettings() const noexcept;
+    inline const VkPipelineLayout& getPipelineLayout() const noexcept;
 
     void bind(VkCommandBuffer commandBuffer) const;
-
-    friend class Mesh;
-    friend class Material;
 
 private:
     PipelineSettings    _settings;
@@ -77,6 +67,17 @@ private:
     VkPipelineLayout    _pipelineLayout;
     VkPipeline          _graphicsPipeline;
 };
+
+
+const PipelineSettings& Pipeline::getSettings() const noexcept
+{
+    return _settings;
+}
+
+const VkPipelineLayout& Pipeline::getPipelineLayout() const noexcept
+{
+    return _pipelineLayout;
+}
 
 
 } // namespace gu2

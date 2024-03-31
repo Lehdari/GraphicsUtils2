@@ -15,6 +15,7 @@
 #include <gu2_util/Image.hpp>
 #include <gu2_util/Typedef.hpp>
 #include <gu2_vulkan/backend.hpp>
+#include <gu2_vulkan/DescriptorManager.hpp>
 #include <gu2_vulkan/Material.hpp>
 #include <gu2_vulkan/Mesh.hpp>
 #include <gu2_vulkan/Pipeline.hpp>
@@ -181,7 +182,8 @@ void createFromGLTF(
     VkDevice device,
     VkCommandPool commandPool,
     VkQueue queue,
-    gu2::PipelineManager* pipelineManager
+    gu2::PipelineManager* pipelineManager,
+    gu2::DescriptorManager* descriptorManager
 ) {
     auto& gltfTextures = gltfLoader.getTextures();
     auto nTextures = gltfTextures.size();
@@ -223,7 +225,7 @@ void createFromGLTF(
     meshMaterialIds.reserve(nPrimitives);
     for (const auto& m : gltfMeshes) {
         for (const auto& p : m.primitives) {
-            meshes->emplace_back(vulkanSettings, physicalDevice, device);
+            meshes->emplace_back(physicalDevice, device);
             auto& mesh = meshes->back();
 
             if (p.indices < 0) {
@@ -411,7 +413,6 @@ void createFromGLTF(
             }
 
             mesh.upload(commandPool, queue);
-            mesh.createDescriptorSets(device, vulkanSettings.framesInFlight);
 
             // Try to find pre-existing material with identical info, create new info if one is not found
             int64_t meshMaterialId = -1;
@@ -441,26 +442,27 @@ void createFromGLTF(
         material.setVertexShader(shaders->at(materialBuildInfo.vertexShaderId));
         material.setFragmentShader(shaders->at(materialBuildInfo.fragmentShaderId));
 
+        // Build descriptor set layouts
+        material.createDescriptorSetLayouts(descriptorManager);
+
+        // Build material pipeline
+        material.createPipeline(pipelineManager, materialBuildInfo.vertexInputInfo);
+
         // Add textures
         if (materialBuildInfo.baseColorTextureId >= 0)
-            material.addTexture(textures->at(materialBuildInfo.baseColorTextureId));
+            material.addUniform(2, 0, textures->at(materialBuildInfo.baseColorTextureId));
         if (materialBuildInfo.metallicRoughnessTextureId >= 0)
-            material.addTexture(textures->at(materialBuildInfo.metallicRoughnessTextureId));
+            material.addUniform(2, 1, textures->at(materialBuildInfo.metallicRoughnessTextureId));
         if (materialBuildInfo.normalTextureId >= 0)
-            material.addTexture(textures->at(materialBuildInfo.normalTextureId));
+            material.addUniform(2, 2, textures->at(materialBuildInfo.normalTextureId));
 
-        material.createDescriptorSets(device, vulkanSettings.framesInFlight);
-
-        material.createPipeline(pipelineManager,
-            material.getDescriptorSetLayout(),
-            meshes->front().getDescriptorSetLayout(), // TODO hack, move all descriptor stuff out from mesh into material
-            materialBuildInfo.vertexInputInfo);
+        material.createDescriptorSets(descriptorManager, vulkanSettings.framesInFlight);
     }
 
     for (size_t i=0; i<meshes->size(); ++i) {
         auto& mesh = meshes->at(i);
         mesh.setMaterial(&materials->at(meshMaterialIds[i]));
-        printf("n. material textures for mesh %lu: %lu\n", i, mesh.getMaterial().getTextures().size());
+        mesh.createDescriptorSets(descriptorManager, vulkanSettings.framesInFlight);
     }
 }
 
@@ -481,12 +483,11 @@ public:
         vkDeviceWaitIdle(_vulkanDevice);
         _meshes.clear();
         gu2::Mesh::destroyUniformBuffers(_vulkanDevice);
-        gu2::Mesh::destroyDescriptorResources(_vulkanDevice);
         _materials.clear();
-        gu2::Material::destroyDescriptorResources(_vulkanDevice);
         _shaders.clear();
         _textures.clear();
         _pipelineManager.reset();
+        _descriptorManager.reset();
         _renderer.reset();
         vkDestroyDevice(_vulkanDevice, nullptr);
         if (_vulkanSettings.enableValidationLayers)
@@ -525,13 +526,15 @@ public:
         defaultPipelineSettings.swapChainExtent = _renderer->getSwapChainExtent();
         _pipelineManager->setDefaultPipelineSettings(defaultPipelineSettings);
 
+        _descriptorManager = std::make_unique<gu2::DescriptorManager>(_vulkanDevice);
+
         // Load sponza (TODO move elsewhere)
         gu2::GLTFLoader sponzaLoader;
         sponzaLoader.readFromFile(gu2::Path(ASSETS_DIR) / "sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf");
         gu2::Mesh::createUniformBuffers(_vulkanPhysicalDevice, _vulkanDevice, _vulkanSettings.framesInFlight, 512); // TODO number of uniforms
         createFromGLTF(sponzaLoader, &_meshes, &_materials, &_shaders, &_textures, _vulkanSettings,
             _vulkanPhysicalDevice, _vulkanDevice, _renderer->getCommandPool(), _vulkanGraphicsQueue,
-            _pipelineManager.get());
+            _pipelineManager.get(), _descriptorManager.get());
 
         _scene.createFromGLFT(sponzaLoader, _meshes);
 
@@ -796,6 +799,7 @@ private:
     std::vector<gu2::Shader>                _shaders;
     std::vector<gu2::Material>              _materials;
     std::vector<gu2::Mesh>                  _meshes;
+    std::unique_ptr<gu2::DescriptorManager> _descriptorManager;
     std::unique_ptr<gu2::PipelineManager>   _pipelineManager;
     gu2::Scene                              _scene;
 };

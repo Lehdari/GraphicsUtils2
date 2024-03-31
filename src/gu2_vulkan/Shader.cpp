@@ -12,6 +12,17 @@
 #include "gu2_util/FileUtils.hpp"
 
 
+#define GU2_SPIRV_REFLECT_QUERY(MODULE, VECTOR, REFLECT_FUNCTION)   \
+{                                                                   \
+    uint32_t count = 0;                                             \
+    result = REFLECT_FUNCTION(&MODULE, &count, NULL);               \
+    assert(result == SPV_REFLECT_RESULT_SUCCESS);                   \
+    VECTOR.resize(count);                                           \
+    result = REFLECT_FUNCTION(&MODULE, &count, VECTOR.data());      \
+    assert(result == SPV_REFLECT_RESULT_SUCCESS);                   \
+}
+
+
 using namespace gu2;
 
 
@@ -94,21 +105,6 @@ void Shader::loadFromFile(const Path& filename, ShaderType type, bool optimize)
     _shaderModule = createShaderModule(_device, _spirv);
 }
 
-const SpirvByteCode& Shader::getSpirvByteCode() const noexcept
-{
-    return _spirv;
-}
-
-const std::vector<SpvReflectInterfaceVariable*>& Shader::getInputVariables() const noexcept
-{
-    return _inputVariables;
-}
-
-const std::vector<SpvReflectDescriptorBinding*>& Shader::getDescriptorBindings() const noexcept
-{
-    return _descriptorBindings;
-}
-
 int64_t Shader::getInputVariableLayoutLocation(const std::string& inputVariableName) const noexcept
 {
     for (const auto& inputVariable : _inputVariables) {
@@ -146,18 +142,32 @@ void Shader::parseSpirvReflection()
     assert(result == SPV_REFLECT_RESULT_SUCCESS);
 
     // Enumerate and extract shader's input variables
-    uint32_t nVars = 0;
-    result = spvReflectEnumerateInputVariables(&_reflectionModule, &nVars, nullptr);
-    assert(result == SPV_REFLECT_RESULT_SUCCESS);
-    _inputVariables.resize(nVars);
-    result = spvReflectEnumerateInputVariables(&_reflectionModule, &nVars, _inputVariables.data());
-    assert(result == SPV_REFLECT_RESULT_SUCCESS);
-
+    GU2_SPIRV_REFLECT_QUERY(_reflectionModule, _inputVariables, spvReflectEnumerateInputVariables)
     // Enumerate and extract shader's descriptor bindings
-    uint32_t nBindings = 0;
-    result = spvReflectEnumerateDescriptorBindings(&_reflectionModule, &nBindings, nullptr);
-    assert(result == SPV_REFLECT_RESULT_SUCCESS);
-    _descriptorBindings.resize(nBindings);
-    result = spvReflectEnumerateDescriptorBindings(&_reflectionModule, &nBindings, _descriptorBindings.data());
-    assert(result == SPV_REFLECT_RESULT_SUCCESS);
+    GU2_SPIRV_REFLECT_QUERY(_reflectionModule, _descriptorBindings, spvReflectEnumerateDescriptorBindings)
+    // Enumerate and extract shader's descriptor sets
+    GU2_SPIRV_REFLECT_QUERY(_reflectionModule, _descriptorSets, spvReflectEnumerateDescriptorSets)
+
+    // Generate all necessary data structures to create VkDescriptorSetLayout for each descriptor set in this shader
+    _descriptorSetLayouts.resize(_descriptorSets.size(), DescriptorSetLayoutInfo{});
+    for (size_t iSet = 0; iSet < _descriptorSets.size(); ++iSet) {
+        const SpvReflectDescriptorSet& reflSet = *(_descriptorSets[iSet]);
+        DescriptorSetLayoutInfo& layout = _descriptorSetLayouts[iSet];
+        layout.bindings.resize(reflSet.binding_count);
+        for (uint32_t iBinding = 0; iBinding < reflSet.binding_count; ++iBinding) {
+            const SpvReflectDescriptorBinding& reflBinding = *(reflSet.bindings[iBinding]);
+            VkDescriptorSetLayoutBinding& layoutBinding = layout.bindings[iBinding];
+            layoutBinding.binding = reflBinding.binding;
+            layoutBinding.descriptorType = static_cast<VkDescriptorType>(reflBinding.descriptor_type);
+            layoutBinding.descriptorCount = 1;
+            for (uint32_t iDim = 0; iDim < reflBinding.array.dims_count; ++iDim) {
+                layoutBinding.descriptorCount *= reflBinding.array.dims[iDim];
+            }
+            layoutBinding.stageFlags = static_cast<VkShaderStageFlagBits>(_reflectionModule.shader_stage);
+        }
+        layout.setId = reflSet.set;
+        layout.createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layout.createInfo.bindingCount = reflSet.binding_count;
+        layout.createInfo.pBindings = layout.bindings.data();
+    }
 }

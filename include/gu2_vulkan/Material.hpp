@@ -10,6 +10,10 @@
 
 #pragma once
 
+
+#include "Descriptor.hpp"
+#include "Shader.hpp"
+
 #include <unordered_map>
 #include <vector>
 
@@ -22,72 +26,60 @@ namespace gu2 {
 class GLTFLoader;
 class Pipeline;
 class PipelineManager;
-class Shader;
 class Texture;
 class VulkanSettings;
 
 
 class Material {
 public:
-    static void createMaterialsFromGLTF(
-        const GLTFLoader& gltfLoader,
-        std::vector<Material>* materials,
-        std::vector<Texture>* textures,
-        const VulkanSettings& vulkanSettings,
-        VkPhysicalDevice physicalDevice,
-        VkDevice device,
-        VkCommandPool commandPool,
-        VkQueue queue
-    );
-
     Material(VkDevice device); // TODO introduce Material::Settings
 
-    void setVertexShader(const Shader& shader);
-    void setFragmentShader(const Shader& shader);
+    void setVertexShader(const Shader& shader); // TODO replace with generic addShader
+    void setFragmentShader(const Shader& shader); // TODO replace with generic addShader
 
-    void addTexture(const Texture& texture);
-    inline const std::vector<const Texture*>& getTextures() const { return _textures; }
+    void createDescriptorSetLayouts(DescriptorManager* descriptorManager);
+    inline const std::vector<DescriptorSetLayoutHandle>& getDescriptorSetLayouts() const noexcept;
 
     void createPipeline(
         PipelineManager* pipelineManager,
-        VkDescriptorSetLayout materialDescriptorSetLayout,
-        VkDescriptorSetLayout meshDescriptorSetLayout,
         const VkPipelineVertexInputStateCreateInfo& vertexInputInfo);
 
     inline const Pipeline* getPipeline() const noexcept { return _pipeline; }
 
-    // Called after all textures have been added
-    void createDescriptorSets(VkDevice device, int framesInFlight);
+    void addUniform(uint32_t set, uint32_t binding, const Texture& texture);
 
-    VkDescriptorSetLayout getDescriptorSetLayout() const;
+    // Called after all uniforms have been added
+    void createDescriptorSets(DescriptorManager* descriptorManager, int framesInFlight);
 
     void bind(
         VkCommandBuffer commandBuffer,
         uint32_t currentFrame
     ) const;
 
-    static void createDescriptorPool(VkDevice device, int framesInFlight, uint32_t maxSets);
-
-    // Destroy the static _descriptorSetLayouts and _descriptorPool
-    static void destroyDescriptorResources(VkDevice device);
-
-    friend class Pipeline;
-    friend class Mesh; // TODO remove
-
 private:
-    // Shared descriptor set layouts for materials with same amount of textures (key indicates the n. of textures)
-    static std::unordered_map<int32_t, VkDescriptorSetLayout>   _descriptorSetLayouts;
-    static VkDescriptorPool                                     _descriptorPool;
+    template <typename T_Uniform>
+    struct UniformHandle {
+        uint32_t            set;
+        uint32_t            binding;
+        const T_Uniform*    data;
+    };
 
-    static const VkDescriptorSetLayout& getTextureDescriptorSetLayout(VkDevice device, int32_t nTextures);
 
-    VkDevice                        _device;
-    const Shader*                   _vertexShader;
-    const Shader*                   _fragmentShader;
-    std::vector<const Texture*>     _textures;
-    const Pipeline*                 _pipeline;
-    std::vector<VkDescriptorSet>    _descriptorSets;
+    VkDevice                                _device;
+    const Shader*                           _vertexShader;
+    const Shader*                           _fragmentShader;
+    std::vector<DescriptorSetLayoutInfo>    _descriptorSetLayoutInfos;
+    std::vector<DescriptorSetLayoutHandle>  _descriptorSetLayouts;
+    const Pipeline*                         _pipeline;
+    std::vector<UniformHandle<Texture>>     _textures;
+    std::vector<DescriptorSetHandle>        _descriptorSets;
 };
+
+
+const std::vector<DescriptorSetLayoutHandle>& Material::getDescriptorSetLayouts() const noexcept
+{
+    return _descriptorSetLayouts;
+}
 
 
 } // namespace gu2

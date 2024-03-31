@@ -11,6 +11,7 @@
 #pragma once
 
 
+#include "Descriptor.hpp"
 #include "gu2_util/Typedef.hpp"
 
 #include <shaderc/shaderc.hpp>
@@ -41,9 +42,10 @@ public:
         ShaderType type = shaderc_glsl_infer_from_source,
         bool optimize = false);
 
-    const SpirvByteCode& getSpirvByteCode() const noexcept;
-    const std::vector<SpvReflectInterfaceVariable*>& getInputVariables() const noexcept;
-    const std::vector<SpvReflectDescriptorBinding*>& getDescriptorBindings() const noexcept;
+    inline const SpirvByteCode& getSpirvByteCode() const noexcept;
+    inline const std::vector<SpvReflectInterfaceVariable*>& getInputVariables() const noexcept;
+    inline const std::vector<SpvReflectDescriptorBinding*>& getDescriptorBindings() const noexcept;
+    inline const std::vector<DescriptorSetLayoutInfo>& getDescriptorSetLayouts() const noexcept;
 
     int64_t getInputVariableLayoutLocation(const std::string& inputVariableName) const noexcept;
 
@@ -64,9 +66,32 @@ private:
     SpvReflectShaderModule                      _reflectionModule;
     std::vector<SpvReflectInterfaceVariable*>   _inputVariables;
     std::vector<SpvReflectDescriptorBinding*>   _descriptorBindings;
+    std::vector<SpvReflectDescriptorSet*>       _descriptorSets;
+    std::vector<DescriptorSetLayoutInfo>        _descriptorSetLayouts;
 
     void parseSpirvReflection();
 };
+
+
+const SpirvByteCode& Shader::getSpirvByteCode() const noexcept
+{
+    return _spirv;
+}
+
+const std::vector<SpvReflectInterfaceVariable*>& Shader::getInputVariables() const noexcept
+{
+    return _inputVariables;
+}
+
+const std::vector<SpvReflectDescriptorBinding*>& Shader::getDescriptorBindings() const noexcept
+{
+    return _descriptorBindings;
+}
+
+const std::vector<DescriptorSetLayoutInfo>& Shader::getDescriptorSetLayouts() const noexcept
+{
+    return _descriptorSetLayouts;
+}
 
 
 } // namespace gu2

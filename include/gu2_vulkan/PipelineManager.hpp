@@ -12,6 +12,7 @@
 
 
 #include "Pipeline.hpp"
+#include "Descriptor.hpp"
 
 #include <unordered_map>
 
@@ -42,8 +43,7 @@ public:
     Pipeline* getPipeline(
         const Shader* vertexShader,
         const Shader* fragmentShader,
-        VkDescriptorSetLayout materialDescriptorSetLayout,
-        VkDescriptorSetLayout meshDescriptorSetLayout,
+        const std::vector<DescriptorSetLayoutHandle>& descriptorSetLayouts,
         const VkPipelineVertexInputStateCreateInfo& vertexInputInfo);
 
 private:

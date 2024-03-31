@@ -11,6 +11,7 @@
 #pragma once
 
 
+#include "Descriptor.hpp"
 #include "VertexAttributesDescription.hpp"
 #include "VulkanSettings.hpp"
 #include "gu2_util/MathTypes.hpp"
@@ -30,6 +31,7 @@ struct UniformBufferObject {
 };
 
 
+class DescriptorManager;
 class GLTFLoader;
 class Material;
 class Pipeline;
@@ -40,20 +42,7 @@ class Scene;
 
 class Mesh {
 public:
-    static void createMeshesFromGLTF(
-        const GLTFLoader& gltfLoader,
-        std::vector<Mesh>* meshes,
-        const std::vector<Material>& materials,
-        const VulkanSettings& vulkanSettings,
-        VkPhysicalDevice physicalDevice,
-        VkDevice device,
-        VkCommandPool commandPool,
-        VkQueue queue);
-
-    Mesh(
-        const VulkanSettings& vulkanSettings,
-        VkPhysicalDevice physicalDevice,
-        VkDevice device);
+    Mesh(VkPhysicalDevice physicalDevice, VkDevice device);
     Mesh(const Mesh&) = delete; // TODO
     Mesh(Mesh&&) = default;
     Mesh& operator=(const Mesh&) = delete; // TODO
@@ -75,9 +64,9 @@ public:
     // of upload is finished.
     void upload(VkCommandPool commandPool, VkQueue queue);
 
-    void createDescriptorSets(VkDevice device, int framesInFlight);
+    void createDescriptorSets(DescriptorManager* descriptorManager, int framesInFlight);
 
-    VkDescriptorSetLayout getDescriptorSetLayout() const;
+    const DescriptorSetLayoutHandle& getDescriptorSetLayout() const;
 
     void setMaterial(const Material* material);
     const Material& getMaterial() const;
@@ -93,11 +82,6 @@ public:
         uint32_t currentFrame,
         uint32_t uniformId
     ) const;
-
-    static void createDescriptorPool(VkDevice device, int framesInFlight);
-
-    // Destroy the static _descriptorSetLayout and _descriptorPool
-    static void destroyDescriptorResources(VkDevice device);
 
     // TODO subject to relocation
     static void createUniformBuffers(
@@ -121,25 +105,21 @@ private:
         }               type;           // Type enum enables VertexBufferInfo usage for both attribute and index inputs
     };
 
-    // TODO Subject to relocation
-    VkPhysicalDevice                _physicalDevice;
-    VkPhysicalDeviceProperties      _physicalDeviceProperties;
-    VkDevice                        _device;
+    VkPhysicalDevice                    _physicalDevice;
+    VkPhysicalDeviceProperties          _physicalDeviceProperties;
+    VkDevice                            _device;
 
-    VertexAttributesDescription     _attributesDescription;
-    std::vector<VertexBufferInfo>   _vertexBufferInfos;
-    uint32_t                        _nIndices;
-    const Material*                 _material;
-    const Pipeline*                 _pipeline;
+    VertexAttributesDescription         _attributesDescription;
+    std::vector<VertexBufferInfo>       _vertexBufferInfos;
+    uint32_t                            _nIndices;
+    const Material*                     _material;
+    const Pipeline*                     _pipeline;
 
-    std::vector<VkBuffer>           _vertexAttributeBuffers;
-    std::vector<VkDeviceMemory>     _vertexBufferMemories;
-    VkBuffer                        _indexBuffer;
-    VkDeviceMemory                  _indexBufferMemory;
-    static std::vector<VkDescriptorSet> _descriptorSets; // TODO only static for now
-
-    static VkDescriptorSetLayout        _descriptorSetLayout; // just a single layout for uniforms for now (TODO)
-    static VkDescriptorPool             _descriptorPool;
+    std::vector<VkBuffer>               _vertexAttributeBuffers;
+    std::vector<VkDeviceMemory>         _vertexBufferMemories;
+    VkBuffer                            _indexBuffer;
+    VkDeviceMemory                      _indexBufferMemory;
+    std::vector<DescriptorSetHandle>    _descriptorSets;
 
     // TODO store actual uniform buffers elsewhere (use dynamic uniforms)
     static std::vector<VkBuffer>        _uniformBuffers;

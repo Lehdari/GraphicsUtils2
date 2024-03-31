@@ -9,6 +9,7 @@
 //
 
 #include "Mesh.hpp"
+#include "DescriptorManager.hpp"
 #include "Material.hpp"
 #include "Pipeline.hpp"
 #include "Renderer.hpp"
@@ -23,160 +24,12 @@
 using namespace gu2;
 
 
-std::vector<VkDescriptorSet>    Mesh::_descriptorSets;
-
-VkDescriptorSetLayout           Mesh::_descriptorSetLayout;
-VkDescriptorPool                Mesh::_descriptorPool;
-
 std::vector<VkBuffer>           Mesh::_uniformBuffers;
 std::vector<VkDeviceMemory>     Mesh::_uniformBuffersMemory;
 std::vector<void*>              Mesh::_uniformBuffersMapped;
 
 
-void Mesh::createMeshesFromGLTF(
-    const GLTFLoader& gltfLoader,
-    std::vector<Mesh>* meshes,
-    const std::vector<Material>& materials,
-    const VulkanSettings& vulkanSettings,
-    VkPhysicalDevice physicalDevice,
-    VkDevice device,
-    VkCommandPool commandPool,
-    VkQueue queue
-) {
-    auto& gltfMeshes = gltfLoader.getMeshes();
-
-    // Count the number of primitives (one gu2::Mesh corresponds to a single GLTF mesh primitive, not mesh)
-    size_t nPrimitives = 0;
-    for (const auto& m : gltfMeshes)
-        nPrimitives += m.primitives.size();
-
-    meshes->clear();
-    meshes->reserve(nPrimitives);
-
-    for (const auto& m : gltfMeshes) {
-        for (const auto& p : m.primitives) {
-            meshes->emplace_back(vulkanSettings, physicalDevice, device);
-            auto& mesh = meshes->back();
-
-            if (p.indices < 0) {
-                fprintf(stderr, "WARNING: Unindexed meshes not currently supported, skipping...\n");
-                continue;
-            }
-
-            printf("==============\n");
-            // Add vertex attributes
-            for (const auto& attribute : p.attributes) {
-                if (attribute.accessorId < 0)
-                    throw std::runtime_error("No accessor ID for attribute \"" + attribute.name + "\" defined");
-                auto& accessor = gltfLoader.getAccessors().at(attribute.accessorId);
-                if (accessor.bufferView < 0)
-                    throw std::runtime_error("No buffer view for attribute \"" + attribute.name + "\" defined");
-                auto& bufferView = gltfLoader.getBufferViews().at(accessor.bufferView);
-                if (bufferView.buffer < 0)
-                    throw std::runtime_error("No buffer for attribute \"" + attribute.name + "\" defined");
-                auto& buffer = gltfLoader.getBuffers().at(bufferView.buffer);
-                if (buffer.buffer == nullptr)
-                    throw std::runtime_error("No buffer loaded");
-
-                printf("%s %ld %ld\n", attribute.name.c_str(), attribute.accessorId, accessor.bufferView);
-
-                if (attribute.name == "POSITION") {
-                    if (accessor.componentType == GLTFLoader::Accessor::ComponentType::FLOAT &&
-                        accessor.type == "VEC3") {
-                        printf("Adding POSITION, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
-                        mesh.addVertexAttribute(0,
-                            reinterpret_cast<Vec3f*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
-                            accessor.count, bufferView.byteStride);
-                    }
-                    else
-                        throw std::runtime_error("Unsupported attribute format for \"POSITION\"");
-                }
-                else if (attribute.name == "NORMAL") {
-                    if (accessor.componentType == GLTFLoader::Accessor::ComponentType::FLOAT &&
-                        accessor.type == "VEC3") {
-                        printf("Adding NORMAL, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
-                        mesh.addVertexAttribute(1,
-                            reinterpret_cast<Vec3f*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
-                            accessor.count, bufferView.byteStride);
-                    }
-                    else
-                        throw std::runtime_error("Unsupported attribute format for \"NORMAL\"");
-                }
-                else if (attribute.name == "TANGENT") {
-                    if (accessor.componentType == GLTFLoader::Accessor::ComponentType::FLOAT &&
-                        accessor.type == "VEC4") {
-                        printf("Adding TANGENT, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
-                        mesh.addVertexAttribute(2,
-                            reinterpret_cast<Vec4f*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
-                            accessor.count, bufferView.byteStride);
-                    }
-                    else
-                        throw std::runtime_error("Unsupported attribute format for \"TANGENT\"");
-                }
-                else if (attribute.name.substr(0, 9) == "TEXCOORD_") {
-                    int texCoordId = std::stoi(attribute.name.substr(9, 1));
-                    if (accessor.componentType == GLTFLoader::Accessor::ComponentType::FLOAT &&
-                        accessor.type == "VEC2") {
-                        printf("Adding %s, count: %lu stride: %lu\n", attribute.name.c_str(), accessor.count,
-                            bufferView.byteStride);
-                        mesh.addVertexAttribute(3+texCoordId,
-                            reinterpret_cast<Vec2f*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
-                            accessor.count, bufferView.byteStride);
-                    }
-                    else
-                        throw std::runtime_error("Unsupported attribute format for \"TEXCOORD\"");
-                }
-            }
-
-            // Add indices
-            {
-                if (p.indices < 0)
-                    throw std::runtime_error("No accessor ID for indices defined");
-                auto& accessor = gltfLoader.getAccessors().at(p.indices);
-                if (accessor.bufferView < 0)
-                    throw std::runtime_error("No buffer view for indices defined");
-                auto& bufferView = gltfLoader.getBufferViews().at(accessor.bufferView);
-                if (bufferView.buffer < 0)
-                    throw std::runtime_error("No buffer for indices defined");
-                auto& buffer = gltfLoader.getBuffers().at(bufferView.buffer);
-                if (buffer.buffer == nullptr)
-                    throw std::runtime_error("No buffer loaded");
-
-                if (accessor.type != "SCALAR")
-                    throw std::runtime_error("Invalid accessor for indices, type not \"SCALAR\"");
-
-                printf("Adding indices, count: %lu stride: %lu\n", accessor.count, bufferView.byteStride);
-                switch (accessor.componentType) {
-                    case GLTFLoader::Accessor::ComponentType::UNSIGNED_SHORT:
-                        mesh.setIndices(
-                            reinterpret_cast<uint16_t*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
-                            accessor.count, bufferView.byteStride);
-                        break;
-                    case GLTFLoader::Accessor::ComponentType::UNSIGNED_INT:
-                        mesh.setIndices(
-                            reinterpret_cast<uint32_t*>(buffer.buffer + bufferView.byteOffset + accessor.byteOffset),
-                            accessor.count, bufferView.byteStride);
-                        break;
-                    default:
-                        throw std::runtime_error("Invalid accessor for indices, component type not \"UNSIGNED_SHORT\" or \"UNSIGNED_INT\"");
-                }
-            }
-
-            mesh.upload(commandPool, queue);
-            mesh.createDescriptorSets(device, vulkanSettings.framesInFlight);
-
-            if (p.material >= 0)
-                mesh.setMaterial(&materials.at(p.material));
-        }
-    }
-}
-
-
-Mesh::Mesh(
-    const VulkanSettings& vulkanSettings,
-    VkPhysicalDevice physicalDevice,
-    VkDevice device
-) :
+Mesh::Mesh(VkPhysicalDevice physicalDevice, VkDevice device) :
     _physicalDevice (physicalDevice),
     _device         (device),
     _nIndices       (0),
@@ -243,47 +96,12 @@ void Mesh::upload(VkCommandPool commandPool, VkQueue queue)
     }
 }
 
-void Mesh::createDescriptorSets(VkDevice device, int framesInFlight)
+void Mesh::createDescriptorSets(DescriptorManager* descriptorManager, int framesInFlight)
 {
-    // Allocate descriptor set layout in case it does not exist
-    if (_descriptorSetLayout == nullptr) {
-        VkDescriptorSetLayoutBinding uboLayoutBinding{};
-        uboLayoutBinding.binding = 0;
-        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-        uboLayoutBinding.descriptorCount = 1;
-        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
-
-        std::array<VkDescriptorSetLayoutBinding, 1> bindings = {uboLayoutBinding};
-        VkDescriptorSetLayoutCreateInfo layoutInfo{};
-        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-        layoutInfo.pBindings = bindings.data();
-
-        if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &_descriptorSetLayout) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create descriptor set layout!");
-        }
-    }
-
-    // Allocate descriptor pools
-    if (_descriptorPool == nullptr)
-        createDescriptorPool(device, framesInFlight);
-
-    // TODO vvvvvvvvvvvvvvvvv using static member for now, rethink mesh uniform storage
-    if (!_descriptorSets.empty())
-        return;
-
-    // Allocate uniform descriptor sets
-    std::vector<VkDescriptorSetLayout> uniformLayouts(framesInFlight, _descriptorSetLayout);
-    VkDescriptorSetAllocateInfo uniformAllocInfo{};
-    uniformAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    uniformAllocInfo.descriptorPool = _descriptorPool;
-    uniformAllocInfo.descriptorSetCount = static_cast<uint32_t>(framesInFlight);
-    uniformAllocInfo.pSetLayouts = uniformLayouts.data();
-    _descriptorSets.resize(framesInFlight);
-    if (vkAllocateDescriptorSets(device, &uniformAllocInfo, _descriptorSets.data()) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to allocate descriptor sets!");
-    }
+    // Allocate descriptor sets
+    auto& layout = getDescriptorSetLayout();
+    _descriptorSets.clear();
+    descriptorManager->allocateDescriptorSets(&_descriptorSets, layout, framesInFlight);
 
     for (size_t i = 0; i < framesInFlight; i++) {
         VkDescriptorBufferInfo bufferInfo{};
@@ -306,9 +124,11 @@ void Mesh::createDescriptorSets(VkDevice device, int framesInFlight)
     }
 }
 
-VkDescriptorSetLayout Mesh::getDescriptorSetLayout() const
+const DescriptorSetLayoutHandle& Mesh::getDescriptorSetLayout() const
 {
-    return _descriptorSetLayout;
+    if (_material == nullptr)
+        throw std::runtime_error("No material set!");
+    return _material->getDescriptorSetLayouts().at(objectDescriptorSetId);
 }
 
 void Mesh::setMaterial(const Material* material)
@@ -351,43 +171,17 @@ void Mesh::draw(
 ) const {
     if (_material == nullptr) return;
 
-    if (_material != nullptr && _material->_textures.size() != 3) // TODO obviously subject to removal once shaders are quaranteed have matching number of textures
-        return;
-
     // Bind material
     if (_material != nullptr)
         _material->bind(commandBuffer, currentFrame);
 
-    auto pipelineLayout = _material->_pipeline->_pipelineLayout;
+    auto pipelineLayout = _material->getPipeline()->getPipelineLayout();
 
     uint32_t offset = uniformId * padUniformBufferSize(_physicalDeviceProperties, sizeof(gu2::UniformBufferObject));
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1,
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, objectDescriptorSetId, 1,
         &_descriptorSets[currentFrame], 1, &offset);
 
     vkCmdDrawIndexed(commandBuffer, _nIndices, 1, 0, 0, 0);
-}
-
-void Mesh::createDescriptorPool(VkDevice device, int framesInFlight)
-{
-    VkDescriptorPoolSize poolSize;
-    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    poolSize.descriptorCount = static_cast<uint32_t>(framesInFlight);
-
-    VkDescriptorPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
-    poolInfo.maxSets = static_cast<uint32_t>(framesInFlight);
-
-    if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &_descriptorPool) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create descriptor pool!");
-    }
-}
-
-void Mesh::destroyDescriptorResources(VkDevice device)
-{
-    vkDestroyDescriptorPool(device, _descriptorPool, nullptr);
-    vkDestroyDescriptorSetLayout(device, _descriptorSetLayout, nullptr);
 }
 
 void Mesh::createUniformBuffers(

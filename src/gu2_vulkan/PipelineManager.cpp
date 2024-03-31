@@ -23,8 +23,7 @@ void PipelineManager::setDefaultPipelineSettings(const PipelineSettings& default
 Pipeline* PipelineManager::getPipeline(
     const Shader* vertexShader,
     const Shader* fragmentShader,
-    VkDescriptorSetLayout materialDescriptorSetLayout,
-    VkDescriptorSetLayout meshDescriptorSetLayout,
+    const std::vector<DescriptorSetLayoutHandle>& descriptorSetLayouts,
     const VkPipelineVertexInputStateCreateInfo& vertexInputInfo
 ) {
     auto key = std::make_pair(vertexShader, fragmentShader);
@@ -34,12 +33,14 @@ Pipeline* PipelineManager::getPipeline(
         newSettings.vertexInputInfo = vertexInputInfo;
         newSettings.vertShaderModule = vertexShader->getShaderModule();
         newSettings.fragShaderModule = vertexShader->getShaderModule();
-        newSettings.materialDescriptorSetLayout = materialDescriptorSetLayout;
-        newSettings.meshDescriptorSetLayout = meshDescriptorSetLayout;
+        for (const auto& descriptorSetLayout : descriptorSetLayouts)
+            newSettings.descriptorSetLayouts.emplace_back(descriptorSetLayout);
 
         auto [newPipelineIter, _] = _pipelines.emplace(key, newSettings);
         newPipelineIter->second.createGraphicsPipeline(vertexShader->getShaderModule(),
             fragmentShader->getShaderModule());
+
+        printf("_pipelines.size(): %lu\n", _pipelines.size());
 
         return &newPipelineIter->second;
     }

@@ -11,13 +11,13 @@ layout(location = 3) in vec2 fragTexCoord1;
 layout(location = 0) out vec4 outColor;
 
 #ifndef DISABLE_BASE_COLOR
-layout(set = 0, binding = 0) uniform sampler2D baseColorTexture; // TODO 0 is the material descriptor set id for now (will be 2)
+layout(set = 2, binding = 0) uniform sampler2D baseColorTexture;
 #endif
 #ifndef DISABLE_METALLIC_ROUGHNESS
-layout(set = 0, binding = 1) uniform sampler2D metallicRoughnessTexture; // TODO 0 is the material descriptor set id for now (will be 2)
+layout(set = 2, binding = 1) uniform sampler2D metallicRoughnessTexture;
 #endif
 #ifndef DISABLE_USE_NORMAL_TEXTURE
-layout(set = 0, binding = 2) uniform sampler2D normalTexture; // TODO 0 is the material descriptor set id for now (will be 2)
+layout(set = 2, binding = 2) uniform sampler2D normalTexture;
 #endif
 
 
