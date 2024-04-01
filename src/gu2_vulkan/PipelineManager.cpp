@@ -32,15 +32,11 @@ Pipeline* PipelineManager::getPipeline(
         PipelineSettings newSettings = _defaultPipelineSettings;
         newSettings.vertexInputInfo = vertexInputInfo;
         newSettings.vertShaderModule = vertexShader->getShaderModule();
-        newSettings.fragShaderModule = vertexShader->getShaderModule();
+        newSettings.fragShaderModule = fragmentShader->getShaderModule();
         for (const auto& descriptorSetLayout : descriptorSetLayouts)
             newSettings.descriptorSetLayouts.emplace_back(descriptorSetLayout);
 
         auto [newPipelineIter, _] = _pipelines.emplace(key, newSettings);
-        newPipelineIter->second.createGraphicsPipeline(vertexShader->getShaderModule(),
-            fragmentShader->getShaderModule());
-
-        printf("_pipelines.size(): %lu\n", _pipelines.size());
 
         return &newPipelineIter->second;
     }

@@ -10,40 +10,45 @@
 
 #include "Pipeline.hpp"
 #include "Material.hpp"
-#include "Mesh.hpp"
-#include "Scene.hpp"
-#include "Texture.hpp"
 #include "VulkanSettings.hpp"
 
 
 using namespace gu2;
 
 
-Pipeline::Pipeline(const PipelineSettings& settings) :
-    _settings           (settings),
+Pipeline::Pipeline(PipelineSettings settings) :
+    _settings           (std::move(settings)),
     _pipelineLayout     (nullptr),
     _graphicsPipeline   (nullptr)
 {
+    createGraphicsPipeline();
 }
 
 Pipeline::~Pipeline()
 {
-    vkDestroyPipeline(_settings.device, _graphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(_settings.device, _pipelineLayout, nullptr);
+    if (_graphicsPipeline != nullptr)
+        vkDestroyPipeline(_settings.device, _graphicsPipeline, nullptr);
+    if (_pipelineLayout != nullptr)
+        vkDestroyPipelineLayout(_settings.device, _pipelineLayout, nullptr);
 }
 
-void Pipeline::createGraphicsPipeline(VkShaderModule vertShaderModule, VkShaderModule fragShaderModule)
+void Pipeline::bind(VkCommandBuffer commandBuffer) const
+{
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
+}
+
+void Pipeline::createGraphicsPipeline()
 {
     VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
     vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    vertShaderStageInfo.module = vertShaderModule;
+    vertShaderStageInfo.module = _settings.vertShaderModule;
     vertShaderStageInfo.pName = "main";
 
     VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
     fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    fragShaderStageInfo.module = fragShaderModule;
+    fragShaderStageInfo.module = _settings.fragShaderModule;
     fragShaderStageInfo.pName = "main";
 
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
@@ -174,9 +179,4 @@ void Pipeline::createGraphicsPipeline(VkShaderModule vertShaderModule, VkShaderM
     if (vkCreateGraphicsPipelines(_settings.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &_graphicsPipeline) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create graphics pipeline!");
     }
-}
-
-void Pipeline::bind(VkCommandBuffer commandBuffer) const
-{
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
 }

@@ -47,14 +47,12 @@ struct PipelineSettings {
 
 class Pipeline {
 public:
-    Pipeline(const PipelineSettings& settings = PipelineSettings());
+    Pipeline(PipelineSettings settings = PipelineSettings());
     Pipeline(const Pipeline& pipeline) = delete;
     Pipeline(Pipeline&& pipeline) = default;
     Pipeline& operator=(const Pipeline& pipeline) = delete;
     Pipeline& operator=(Pipeline&& pipeline) = default;
     ~Pipeline();
-
-    void createGraphicsPipeline(VkShaderModule vertShaderModule, VkShaderModule fragShaderModule);
 
     inline const PipelineSettings& getSettings() const noexcept;
     inline const VkPipelineLayout& getPipelineLayout() const noexcept;
@@ -63,9 +61,10 @@ public:
 
 private:
     PipelineSettings    _settings;
-
     VkPipelineLayout    _pipelineLayout;
     VkPipeline          _graphicsPipeline;
+
+    void createGraphicsPipeline();
 };
 
 

@@ -161,7 +161,7 @@ struct MaterialBuildInfo {
     int64_t                                 baseColorTextureId          {-1};
     int64_t                                 metallicRoughnessTextureId  {-1};
     int64_t                                 normalTextureId             {-1};
-    VkPipelineVertexInputStateCreateInfo    vertexInputInfo;
+    VkPipelineVertexInputStateCreateInfo    vertexInputInfo             {};
 };
 bool operator==(const MaterialBuildInfo& info1, const MaterialBuildInfo& info2) {
     return info1.vertexShaderId == info2.vertexShaderId &&
