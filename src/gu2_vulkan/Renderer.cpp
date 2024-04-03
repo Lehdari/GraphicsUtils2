@@ -23,7 +23,7 @@
 using namespace gu2;
 
 
-Renderer::Renderer(const Settings& settings) :
+Renderer::Renderer(const RendererSettings& settings) :
     _vulkanSettings     (settings.vulkanSettings),
     _physicalDevice     (settings.physicalDevice),
     _device             (settings.device),

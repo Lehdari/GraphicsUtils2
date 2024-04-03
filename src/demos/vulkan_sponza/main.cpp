@@ -506,7 +506,7 @@ public:
         createSurface();
         selectPhysicalDevice();
         createLogicalDevice();
-        gu2::Renderer::Settings rendererSettings {
+        gu2::RendererSettings rendererSettings {
             &_vulkanSettings,
             _vulkanPhysicalDevice,
             _vulkanDevice,

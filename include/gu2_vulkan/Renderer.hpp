@@ -27,17 +27,18 @@ class Scene;
 class VulkanSettings;
 
 
+struct RendererSettings {
+    const VulkanSettings*   vulkanSettings;
+    VkPhysicalDevice        physicalDevice;
+    VkDevice                device;
+    VkSurfaceKHR            surface;
+    WindowObject*           window;
+};
+
+
 class Renderer {
 public:
-    struct Settings {
-        const VulkanSettings*   vulkanSettings;
-        VkPhysicalDevice        physicalDevice;
-        VkDevice                device;
-        VkSurfaceKHR            surface;
-        WindowObject*           window;
-    };
-
-    Renderer(const Settings& settings);
+    Renderer(const RendererSettings& settings);
     Renderer(const Renderer& pipeline) = delete;
     Renderer(Renderer&& pipeline) = delete;
     Renderer& operator=(const Renderer& pipeline) = delete;
