@@ -68,9 +68,6 @@ public:
     void endRender(VkQueue graphicsQueue, VkQueue presentQueue, uint32_t imageIndex);
     void framebufferResized();
 
-    // TODO subject to relocation
-    void updateUniformBuffer(const Scene& scene);
-
     friend class Mesh; // TODO remove
 
 private:
