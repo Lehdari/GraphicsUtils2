@@ -11,6 +11,7 @@
 #pragma once
 
 #include "backend.hpp"
+#include "AttachmentHandle.hpp"
 #include "gu2_util/MathTypes.hpp"
 
 #include <vulkan/vulkan.h>
@@ -32,28 +33,28 @@ struct RendererSettings {
     VkPhysicalDevice        physicalDevice;
     VkDevice                device;
     VkSurfaceKHR            surface;
+    VkQueue                 graphicsQueue;
     WindowObject*           window;
 };
 
 
 class Renderer {
 public:
-    Renderer(const RendererSettings& settings);
+    Renderer(RendererSettings settings);
     Renderer(const Renderer& pipeline) = delete;
     Renderer(Renderer&& pipeline) = delete;
     Renderer& operator=(const Renderer& pipeline) = delete;
     Renderer& operator=(Renderer&& pipeline) = delete;
     ~Renderer();
 
-    void createImageViews();
-    void createDepthResources(VkQueue graphicsQueue);
+    void createCommandPool();
+    void createCommandBuffers();
+    void createDepthResources();
     void createSwapChain();
     void cleanupSwapChain();
-    void recreateSwapChain(VkQueue graphicsQueue);
+    void recreateSwapChain();
     void createRenderPass();
-    void createCommandPool();
     void createFramebuffers();
-    void createCommandBuffers();
     void createSyncObjects();
 
     void recordRenderPassCommands(VkCommandBuffer commandBuffer, uint32_t imageIndex);
@@ -64,31 +65,31 @@ public:
     VkRenderPass getRenderPass() const;
     VkExtent2D getSwapChainExtent() const;
 
-    bool beginRender(VkQueue graphicsQueue, VkCommandBuffer* commandBuffer, uint32_t* imageIndex);
-    void endRender(VkQueue graphicsQueue, VkQueue presentQueue, uint32_t imageIndex);
+    bool beginRender(VkCommandBuffer* commandBuffer, uint32_t* imageIndex);
+    void endRender(VkQueue presentQueue, uint32_t imageIndex);
     void framebufferResized();
 
     friend class Mesh; // TODO remove
 
 private:
-    // TODO Subject to relocation
-    const VulkanSettings*           _vulkanSettings;
-    VkPhysicalDevice                _physicalDevice;
+    // Helper struct for wrapping all the stuff that needs to be replicated for each swapchain image
+    struct SwapChainData {
+        VkImage             image           {nullptr};
+        AttachmentHandle    colorAttachment {};
+        VkFramebuffer       framebuffer     {nullptr};
+    };
+
+    RendererSettings                _settings;
     VkPhysicalDeviceProperties      _physicalDeviceProperties;
-    VkDevice                        _device;
-    VkSurfaceKHR                    _surface;
-    WindowObject*                   _window;
 
     VkImage                         _depthImage;
     VkDeviceMemory                  _depthImageMemory;
-    VkImageView                     _depthImageView;
+    AttachmentHandle                _depthAttachment;
     VkSwapchainKHR                  _swapChain;
-    std::vector<VkImage>            _swapChainImages;
-    std::vector<VkImageView>        _swapChainImageViews;
     VkFormat                        _swapChainImageFormat;
     VkExtent2D                      _swapChainExtent;
+    std::vector<SwapChainData>      _swapChainObjects;
     VkRenderPass                    _renderPass;
-    std::vector<VkFramebuffer>      _swapChainFramebuffers;
     VkCommandPool                   _commandPool;
     std::vector<VkCommandBuffer>    _commandBuffers;
     std::vector<VkSemaphore>        _imageAvailableSemaphores;

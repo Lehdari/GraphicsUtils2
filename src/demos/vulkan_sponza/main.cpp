@@ -511,13 +511,13 @@ public:
             _vulkanPhysicalDevice,
             _vulkanDevice,
             _vulkanSurface,
+            _vulkanGraphicsQueue,
             &_window
         };
         _renderer = std::make_unique<gu2::Renderer>(rendererSettings);
-        _renderer->createSwapChain();
-        _renderer->createImageViews();
         _renderer->createRenderPass();
-        _renderer->createCommandPool();
+        _renderer->createFramebuffers();
+        _renderer->createSyncObjects();
 
         _pipelineManager = std::make_unique<gu2::PipelineManager>();
         gu2::PipelineSettings defaultPipelineSettings;
@@ -537,11 +537,6 @@ public:
             _pipelineManager.get(), _descriptorManager.get());
 
         _scene.createFromGLFT(sponzaLoader, _meshes);
-
-        _renderer->createDepthResources(_vulkanGraphicsQueue);
-        _renderer->createFramebuffers();
-        _renderer->createCommandBuffers();
-        _renderer->createSyncObjects();
     }
 
     void createInstance()
@@ -775,11 +770,11 @@ public:
     {
         VkCommandBuffer commandBuffer;
         uint32_t imageIndex;
-        if (!_renderer->beginRender(_vulkanGraphicsQueue, &commandBuffer, &imageIndex))
+        if (!_renderer->beginRender(&commandBuffer, &imageIndex))
             return; // swap chain got resized
         recordCommandBuffer(commandBuffer, imageIndex);
         gu2::Mesh::updateUniformBuffer(_scene, *_renderer);
-        _renderer->endRender(_vulkanGraphicsQueue, _vulkanPresentQueue, imageIndex);
+        _renderer->endRender(_vulkanPresentQueue, imageIndex);
     }
 
 private:
