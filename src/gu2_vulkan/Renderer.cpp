@@ -17,17 +17,15 @@
 #include "VulkanSettings.hpp"
 #include "QueryWrapper.hpp"
 
-#include <array>
-
 
 using namespace gu2;
 
 
 Renderer::Renderer(RendererSettings settings) :
     _settings           (settings),
-    _renderPass         (nullptr),
     _framebufferResized (false),
-    _currentFrame       (0)
+    _currentFrame       (0),
+    _compositePass      ({_settings.device})
 {
     // Store the device properties in local struct
     vkGetPhysicalDeviceProperties(_settings.physicalDevice, &_physicalDeviceProperties);
@@ -35,6 +33,7 @@ Renderer::Renderer(RendererSettings settings) :
     createCommandPool();
     createCommandBuffers();
     createSwapChain();
+    createSyncObjects();
 }
 
 Renderer::~Renderer()
@@ -47,7 +46,6 @@ Renderer::~Renderer()
     for (auto& inFlightFence : _inFlightFences)
         vkDestroyFence(_settings.device, inFlightFence, nullptr);
     vkDestroyCommandPool(_settings.device, _commandPool, nullptr);
-    vkDestroyRenderPass(_settings.device, _renderPass, nullptr);
 }
 
 void Renderer::createCommandPool()
@@ -101,7 +99,8 @@ void Renderer::createDepthResources()
             .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
         },
         gu2::createImageView(_settings.device, _depthImage, depthFormat,
-            VK_IMAGE_ASPECT_DEPTH_BIT, 1)
+            VK_IMAGE_ASPECT_DEPTH_BIT, 1),
+        _swapChainExtent
     };
 
     gu2::transitionImageLayout(_settings.device, _commandPool, _settings.graphicsQueue, _depthImage,
@@ -183,9 +182,13 @@ void Renderer::createSwapChain()
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
             },
             gu2::createImageView(_settings.device, _swapChainObjects[i].image, _swapChainImageFormat,
-                VK_IMAGE_ASPECT_COLOR_BIT, 1)
+                VK_IMAGE_ASPECT_COLOR_BIT, 1),
+            _swapChainExtent
         };
     }
+
+    // Composite pass needs to be recreated also (new swapchain attachments)
+    createCompositePass();
 }
 
 void Renderer::cleanupSwapChain()
@@ -195,7 +198,6 @@ void Renderer::cleanupSwapChain()
     vkFreeMemory(_settings.device, _depthImageMemory, nullptr);
 
     for (auto& imageData : _swapChainObjects) {
-        vkDestroyFramebuffer(_settings.device, imageData.framebuffer, nullptr);
         vkDestroyImageView(_settings.device, imageData.colorAttachment.imageView, nullptr);
     }
 
@@ -208,68 +210,16 @@ void Renderer::recreateSwapChain()
 
     cleanupSwapChain();
     createSwapChain();
-    createFramebuffers();
 
     _framebufferResized = false;
 }
 
-void Renderer::createRenderPass()
+void Renderer::createCompositePass()
 {
-    VkSubpassDescription subpass{};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &_swapChainObjects[0].colorAttachment.reference;
-    subpass.pDepthStencilAttachment = &_depthAttachment.reference;
-
-    // Add dependency to prevent image transitions before swap chain image is available
-    VkSubpassDependency dependency{};
-    dependency.srcSubpass = VK_SUBPASS_EXTERNAL; // previous render pass (present)
-    dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT; // wait for image copy to swapchain image to be ready
-    dependency.srcAccessMask = 0;
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT; // prevent any modifications to the color
-    // attachment: this prevents layout transitions from happening before color attachment output stage
-
-    std::array<VkAttachmentDescription, 2> attachments = {
-        _swapChainObjects[0].colorAttachment.description, _depthAttachment.description};
-    VkRenderPassCreateInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-    renderPassInfo.pAttachments = attachments.data();
-    renderPassInfo.subpassCount = 1;
-    renderPassInfo.pSubpasses = &subpass;
-    renderPassInfo.dependencyCount = 1;
-    renderPassInfo.pDependencies = &dependency;
-
-    if (vkCreateRenderPass(_settings.device, &renderPassInfo, nullptr, &_renderPass) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create render pass!");
-    }
-}
-
-void Renderer::createFramebuffers()
-{
-    for (auto& imageData : _swapChainObjects) {
-        std::array<VkImageView, 2> framebufferAttachments = {
-            imageData.colorAttachment.imageView, _depthAttachment.imageView
-        };
-
-        VkFramebufferCreateInfo framebufferInfo{};
-        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.renderPass = _renderPass;
-        framebufferInfo.attachmentCount = static_cast<uint32_t>(framebufferAttachments.size());
-        framebufferInfo.pAttachments = framebufferAttachments.data();
-        framebufferInfo.width = _swapChainExtent.width;
-        framebufferInfo.height = _swapChainExtent.height;
-        framebufferInfo.layers = 1;
-
-        if (vkCreateFramebuffer(_settings.device, &framebufferInfo, nullptr, &imageData.framebuffer) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create framebuffer!");
-        }
-    }
+    for (size_t i=0; i<_swapChainObjects.size(); ++i)
+        _compositePass.setOutputAttachment(_swapChainObjects[i].colorAttachment, i);
+    _compositePass.setOutputAttachment(_depthAttachment);
+    _compositePass.build();
 }
 
 void Renderer::createSyncObjects()
@@ -294,64 +244,14 @@ void Renderer::createSyncObjects()
     }
 }
 
-void Renderer::recordRenderPassCommands(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+bool Renderer::render(const Scene& scene, VkQueue presentQueue)
 {
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = _renderPass;
-    renderPassInfo.framebuffer = _swapChainObjects[imageIndex].framebuffer;
-    renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent = _swapChainExtent;
-    std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-    clearValues[1].depthStencil = {0.0f, 0};
-    renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-    renderPassInfo.pClearValues = clearValues.data();
-
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(_swapChainExtent.width);
-    viewport.height = static_cast<float>(_swapChainExtent.height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = _swapChainExtent;
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-}
-
-VkCommandPool Renderer::getCommandPool()
-{
-    return _commandPool;
-}
-
-uint64_t Renderer::getCurrentFrame() const
-{
-    return _currentFrame;
-}
-
-VkRenderPass Renderer::getRenderPass() const
-{
-    return _renderPass;
-}
-
-VkExtent2D Renderer::getSwapChainExtent() const
-{
-    return _swapChainExtent;
-}
-
-bool Renderer::beginRender(VkCommandBuffer* commandBuffer, uint32_t* imageIndex)
-{
+    uint32_t swapChainImageId = 0;
     vkWaitForFences(_settings.device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
 
     // Check for swap chain obsolescence
     auto nextImageStatus = vkAcquireNextImageKHR(_settings.device, _swapChain, UINT64_MAX,
-        _imageAvailableSemaphores[_currentFrame], VK_NULL_HANDLE, imageIndex);
+        _imageAvailableSemaphores[_currentFrame], VK_NULL_HANDLE, &swapChainImageId);
     if (nextImageStatus == VK_ERROR_OUT_OF_DATE_KHR || nextImageStatus == VK_SUBOPTIMAL_KHR) {
         recreateSwapChain();
         return false;
@@ -359,16 +259,30 @@ bool Renderer::beginRender(VkCommandBuffer* commandBuffer, uint32_t* imageIndex)
     else if (nextImageStatus != VK_SUCCESS)
         throw std::runtime_error("Failed to acquire swap chain image!");
 
+    // Reset sync objects
     vkResetFences(_settings.device, 1, &_inFlightFences[_currentFrame]);
-
     vkResetCommandBuffer(_commandBuffers[_currentFrame], 0);
 
-    *commandBuffer = _commandBuffers[_currentFrame];
-    return true;
-}
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = 0; // Optional
+    beginInfo.pInheritanceInfo = nullptr; // Optional
 
-void Renderer::endRender(VkQueue presentQueue, uint32_t imageIndex)
-{
+    if (vkBeginCommandBuffer(_commandBuffers[_currentFrame], &beginInfo) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to begin recording command buffer!");
+    }
+
+    // Render passes
+    _compositePass.setScene(scene);
+    dynamic_cast<RenderPass*>(&_compositePass)->render(_commandBuffers[_currentFrame], swapChainImageId,
+        _currentFrame);
+
+    vkCmdEndRenderPass(_commandBuffers[_currentFrame]);
+
+    if (vkEndCommandBuffer(_commandBuffers[_currentFrame]) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to record command buffer!");
+    }
+
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -394,10 +308,9 @@ void Renderer::endRender(VkQueue presentQueue, uint32_t imageIndex)
     presentInfo.waitSemaphoreCount = 1;
     presentInfo.pWaitSemaphores = signalSemaphores;
 
-    VkSwapchainKHR swapChains[] = {_swapChain};
     presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = swapChains;
-    presentInfo.pImageIndices = &imageIndex;
+    presentInfo.pSwapchains = &_swapChain;
+    presentInfo.pImageIndices = &swapChainImageId;
     presentInfo.pResults = nullptr; // Optional
 
     auto queuePresentStatus = vkQueuePresentKHR(presentQueue, &presentInfo);
@@ -409,6 +322,28 @@ void Renderer::endRender(VkQueue presentQueue, uint32_t imageIndex)
         throw std::runtime_error("Failed to present swap chain image!");
 
     _currentFrame = (_currentFrame+1) % _settings.vulkanSettings->framesInFlight;
+
+    return true; // rendering succeeded
+}
+
+VkCommandPool Renderer::getCommandPool()
+{
+    return _commandPool;
+}
+
+uint64_t Renderer::getCurrentFrame() const
+{
+    return _currentFrame;
+}
+
+VkRenderPass Renderer::getRenderPass() const
+{
+    return _compositePass._renderPass;
+}
+
+VkExtent2D Renderer::getSwapChainExtent() const
+{
+    return _swapChainExtent;
 }
 
 void Renderer::framebufferResized()

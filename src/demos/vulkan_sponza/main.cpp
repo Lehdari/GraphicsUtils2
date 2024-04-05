@@ -515,9 +515,6 @@ public:
             &_window
         };
         _renderer = std::make_unique<gu2::Renderer>(rendererSettings);
-        _renderer->createRenderPass();
-        _renderer->createFramebuffers();
-        _renderer->createSyncObjects();
 
         _pipelineManager = std::make_unique<gu2::PipelineManager>();
         gu2::PipelineSettings defaultPipelineSettings;
@@ -717,32 +714,6 @@ public:
         vkGetDeviceQueue(_vulkanDevice, familyIndices.presentFamily.value(), 0, &_vulkanPresentQueue);
     }
 
-    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
-    {
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = 0; // Optional
-        beginInfo.pInheritanceInfo = nullptr; // Optional
-
-        if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to begin recording command buffer!");
-        }
-
-        _renderer->recordRenderPassCommands(commandBuffer, imageIndex);
-
-        for (size_t nodeId=0; nodeId<_scene.nodes.size(); ++nodeId) {
-            const auto& node = _scene.nodes[nodeId];
-            node.mesh->bind(commandBuffer);
-            node.mesh->draw(commandBuffer, _renderer->getCurrentFrame(), nodeId);
-        }
-
-        vkCmdEndRenderPass(commandBuffer);
-
-        if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to record command buffer!");
-        }
-    }
-
     void handleEvent(const gu2::Event& event)
     {
         switch (event.type) {
@@ -768,13 +739,8 @@ public:
 
     void render()
     {
-        VkCommandBuffer commandBuffer;
-        uint32_t imageIndex;
-        if (!_renderer->beginRender(&commandBuffer, &imageIndex))
-            return; // swap chain got resized
-        recordCommandBuffer(commandBuffer, imageIndex);
+        _renderer->render(_scene, _vulkanPresentQueue);
         gu2::Mesh::updateUniformBuffer(_scene, *_renderer);
-        _renderer->endRender(_vulkanPresentQueue, imageIndex);
     }
 
 private:

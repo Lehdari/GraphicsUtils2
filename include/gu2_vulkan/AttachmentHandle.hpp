@@ -21,6 +21,7 @@ struct AttachmentHandle {
     VkAttachmentDescription description; // TODO possibly change into pointers since these do not need to be replicated for each swap chain image
     VkAttachmentReference   reference;
     VkImageView             imageView;
+    VkExtent2D              imageExtent;
     // TODO maybe introduce proper RAII facilities to handle creation and freeing of imageView
 };
 
