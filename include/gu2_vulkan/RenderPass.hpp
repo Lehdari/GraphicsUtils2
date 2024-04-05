@@ -52,6 +52,14 @@ protected:
     uint64_t            _currentFrame;
 
 private:
+    enum class AttachmentType {
+        COLOR,
+        DEPTH,
+        UNKNOWN
+    };
+
+    static AttachmentType getAttachmentType(const AttachmentHandle* attachment);
+
     void createRenderPass(
         const std::vector<VkAttachmentReference>& colorAttachmentReferences,
         const VkAttachmentReference* depthAttachmentReference,

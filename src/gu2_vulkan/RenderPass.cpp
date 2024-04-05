@@ -35,29 +35,28 @@ RenderPass::~RenderPass()
 
 void RenderPass::setOutputAttachment(const AttachmentHandle& attachment, uint32_t swapChainImageId)
 {
-    _outputAttachments[attachment.reference.attachment].resize(swapChainImageId+1);
-    _outputAttachments[attachment.reference.attachment][swapChainImageId] = &attachment;
+    auto& attachments = _outputAttachments[attachment.reference.attachment];
+    attachments.resize(std::max<size_t>(swapChainImageId+1, attachments.size()));
+    attachments[swapChainImageId] = &attachment;
     _outputExtent = attachment.imageExtent; // TODO check this too
     // TODO maybe check that other attachment parameters (such as reference.layout) match to the ones already in vector
+    _nSwapChainImages = std::max(_nSwapChainImages, swapChainImageId+1);
 }
 
 void RenderPass::build()
 {
-    _nSwapChainImages = 0;
+    // Parse attachments for render pass creation
     std::vector<VkAttachmentReference> colorAttachmentReferences;
     std::vector<VkAttachmentDescription> attachmentDescriptions;
     const AttachmentHandle* depthAttachment{nullptr};
     for (const auto& [attachmentId, attachments] : _outputAttachments) {
-        // TODO use more robust method for detecting the type of the attachment
-        if (attachments.front()->reference.layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
-            if (_nSwapChainImages == 0)
-                _nSwapChainImages = attachments.size();
-            else if (attachments.size() != _nSwapChainImages)
+        if (getAttachmentType(attachments.front()) == AttachmentType::COLOR) {
+            if (attachments.size() != _nSwapChainImages)
                 throw std::runtime_error("Inconsistent amount of color attachments provided");
 
             colorAttachmentReferences.emplace_back(attachments.front()->reference);
         }
-        else if (attachments.front()->reference.layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+        else if (getAttachmentType(attachments.front()) == AttachmentType::DEPTH) {
             if (attachments.size() > 1)
                 throw std::runtime_error("More than a single depth/stencil attachment provided");
             depthAttachment = attachments.front();
@@ -75,13 +74,13 @@ void RenderPass::build()
     std::vector<std::vector<VkImageView>> framebufferAttachments(_nSwapChainImages);
     for (const auto& [attachmentId, attachments] : _outputAttachments) {
         // TODO use more robust method for detecting the type of the attachment
-        if (attachments.front()->reference.layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+        if (getAttachmentType(attachments.front()) == AttachmentType::COLOR) {
             for (size_t i=0; i<attachments.size(); ++i) {
                 framebufferAttachments[i].resize(std::max<size_t>(attachmentId+1, framebufferAttachments[i].size()));
                 framebufferAttachments[i][attachmentId] = attachments[i]->imageView;
             }
         }
-        else if (attachments.front()->reference.layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+        else if (getAttachmentType(attachments.front()) == AttachmentType::DEPTH) {
             for (uint32_t i=0; i<_nSwapChainImages; ++i) {
                 framebufferAttachments[i].resize(std::max<size_t>(attachmentId+1, framebufferAttachments[i].size()));
                 framebufferAttachments[i][attachmentId] = attachments.front()->imageView;
@@ -105,6 +104,19 @@ void RenderPass::build()
         if (vkCreateFramebuffer(_settings.device, &framebufferInfo, nullptr, &_framebuffers[i]) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create framebuffer!");
         }
+    }
+}
+
+
+RenderPass::AttachmentType RenderPass::getAttachmentType(const AttachmentHandle* attachment)
+{
+    switch (attachment->reference.layout) {
+        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+            return AttachmentType::COLOR;
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+            return AttachmentType::DEPTH;
+        default:
+            return AttachmentType::UNKNOWN;
     }
 }
 
