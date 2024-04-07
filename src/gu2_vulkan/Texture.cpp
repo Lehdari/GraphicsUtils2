@@ -51,11 +51,11 @@ void Texture::loadFromFile(VkCommandPool commandPool, VkQueue queue, const Path&
 
 void Texture::createTextureImage(VkCommandPool commandPool, VkQueue queue, const Path& filename)
 {
-#if 1   // TODO temporary toggle to prevent expensive conversion
+#if 0   // TODO temporary toggle to prevent expensive conversion
     Image<uint8_t> image;
     gu2::convertImage(gu2::readImageFromFile<uint8_t>(filename), image, gu2::ImageFormat::RGBA);
 #else
-    gu2::Image<uint8_t> image(512, 512);
+    gu2::Image<uint8_t> image(256, 256);
 #endif
 
     _imageMipLevels = std::floor(std::log2(std::max(image.width(), image.height()))) + 1;

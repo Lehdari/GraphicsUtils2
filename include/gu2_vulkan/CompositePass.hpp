@@ -12,24 +12,30 @@
 
 
 #include "RenderPass.hpp"
+#include "Mesh.hpp"
+#include "Shader.hpp"
+#include "Material.hpp"
+#include "gu2_util/MathTypes.hpp"
 
 
 namespace gu2 {
 
 
-class Scene;
-
-
 class CompositePass : public RenderPass {
 public:
-    CompositePass(RenderPassSettings settings) noexcept;
-
-    void setScene(const Scene& scene) noexcept;
+    CompositePass(RenderPassSettings settings, VkPhysicalDevice physicalDevice) noexcept;
 
     void render() final;
 
 private:
-    const Scene*    _scene;
+    static std::vector<Vec2f>       _quadPositions;
+    static std::vector<Vec2f>       _quadTexCoords;
+    static std::vector<uint32_t>    _quadIndices;
+
+    Mesh                            _quad;
+    Shader                          _vertexShader;
+    Shader                          _fragmentShader;
+    Material                        _material;
 };
 
 

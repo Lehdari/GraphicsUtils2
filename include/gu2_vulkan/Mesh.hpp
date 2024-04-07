@@ -77,11 +77,8 @@ public:
     const VertexAttributesDescription& getVertexAttributesDescription() const;
 
     void bind(VkCommandBuffer commandBuffer) const;
-    void draw(
-        VkCommandBuffer commandBuffer,
-        uint32_t currentFrame,
-        uint32_t uniformId
-    ) const;
+    void draw(VkCommandBuffer commandBuffer, uint32_t currentFrame, uint32_t uniformId) const;
+    void draw(VkCommandBuffer commandBuffer, uint32_t currentFrame) const;
 
     // TODO subject to relocation
     static void createUniformBuffers(

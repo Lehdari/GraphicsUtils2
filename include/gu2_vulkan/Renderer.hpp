@@ -12,6 +12,7 @@
 
 #include "backend.hpp"
 #include "CompositePass.hpp"
+#include "GeometryPass.hpp"
 #include "gu2_util/MathTypes.hpp"
 
 #include <vulkan/vulkan.h>
@@ -50,9 +51,11 @@ public:
     void createCommandPool();
     void createCommandBuffers();
     void createDepthResources();
+    void createGBufferResources();
     void createSwapChain();
     void cleanupSwapChain();
     void recreateSwapChain();
+    void createGeometryPass();
     void createCompositePass();
     void createSyncObjects();
 
@@ -61,7 +64,7 @@ public:
     VkCommandPool getCommandPool();
     uint64_t getCurrentFrame() const;
 
-    VkRenderPass getRenderPass() const;
+    VkRenderPass getGeometryRenderPass() const;
     VkExtent2D getSwapChainExtent() const;
 
     void framebufferResized();
@@ -81,6 +84,12 @@ private:
     VkImage                         _depthImage;
     VkDeviceMemory                  _depthImageMemory;
     AttachmentHandle                _depthAttachment;
+
+    // GBuffer
+    VkImage                         _baseColorImage;
+    VkDeviceMemory                  _baseColorImageMemory;
+    AttachmentHandle                _baseColorAttachment;
+
     VkSwapchainKHR                  _swapChain;
     VkFormat                        _swapChainImageFormat;
     VkExtent2D                      _swapChainExtent;
@@ -93,6 +102,7 @@ private:
     bool                            _framebufferResized;
     uint64_t                        _currentFrame;
 
+    GeometryPass                    _geometryPass;
     CompositePass                   _compositePass;
 };
 

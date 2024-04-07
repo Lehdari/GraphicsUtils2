@@ -263,7 +263,7 @@ void createFromGLTF(
                 auto& shader = shaders->back();
                 if (requiredVertexAttributes.size() < 5)
                     shader.addMacroDefinition("DISABLE_IN_TEX_COORD_1", "true");
-                shader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "vertex/pbr.glsl");
+                shader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "vertex/pbr_gbuffer.glsl");
             }
 
             printf("requiredVertexAttributes.size(): %lu vertexShaderId: %ld\n",
@@ -306,7 +306,7 @@ void createFromGLTF(
                     "normalTexture") == requiredDescriptorBindings.end())
                     shader.addMacroDefinition("DISABLE_USE_NORMAL_TEXTURE", "true");
 
-                shader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "fragment/pbr.glsl");
+                shader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "fragment/pbr_gbuffer.glsl");
             }
 
             printf("requiredDescriptorBindings.size(): %lu fragmentShaderId: %ld\n",
@@ -519,7 +519,7 @@ public:
         _pipelineManager = std::make_unique<gu2::PipelineManager>();
         gu2::PipelineSettings defaultPipelineSettings;
         defaultPipelineSettings.device = _vulkanDevice;
-        defaultPipelineSettings.renderPass = _renderer->getRenderPass();
+        defaultPipelineSettings.renderPass = _renderer->getGeometryRenderPass();
         defaultPipelineSettings.swapChainExtent = _renderer->getSwapChainExtent();
         _pipelineManager->setDefaultPipelineSettings(defaultPipelineSettings);
 

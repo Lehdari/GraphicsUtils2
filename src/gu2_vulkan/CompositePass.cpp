@@ -9,32 +9,46 @@
 //
 
 #include "CompositePass.hpp"
-#include "Scene.hpp"
-#include "Mesh.hpp"
 
 
 using namespace gu2;
 
 
-CompositePass::CompositePass(RenderPassSettings settings) noexcept :
-    RenderPass  (std::move(settings)),
-    _scene      (nullptr)
-{
-}
+std::vector<Vec2f> CompositePass::_quadPositions {
+    {-1.0f, -1.0f},
+    {1.0f, -1.0f},
+    {-1.0f, 1.0f},
+    {1.0f, 1.0f}
+};
 
-void CompositePass::setScene(const Scene& scene) noexcept
+std::vector<Vec2f> CompositePass::_quadTexCoords {
+    {0.0f, 0.0f},
+    {1.0f, 0.0f},
+    {0.0f, 1.0f},
+    {1.0f, 1.0f}
+};
+
+std::vector<uint32_t> CompositePass::_quadIndices {
+    0, 1, 3, 0, 3, 2
+};
+
+
+CompositePass::CompositePass(RenderPassSettings settings, VkPhysicalDevice physicalDevice) noexcept :
+    RenderPass      (std::move(settings)),
+    _quad           (physicalDevice, _settings.device),
+    _vertexShader   (_settings.device),
+    _fragmentShader (_settings.device),
+    _material       (_settings.device)
 {
-    _scene = &scene;
+    _quad.addVertexAttribute(0, _quadPositions.data(), _quadPositions.size());
+    _quad.setIndices(_quadIndices.data(), _quadIndices.size());
+
+    _vertexShader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "vertex/pbr_lighting.glsl");
+    _fragmentShader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "fragment/pbr_lighting.glsl");
+    _material.load
 }
 
 void CompositePass::render()
 {
-    if (_scene == nullptr)
-        throw std::runtime_error("No scene to render set");
-
-    for (size_t nodeId=0; nodeId<_scene->nodes.size(); ++nodeId) {
-        const auto& node = _scene->nodes[nodeId];
-        node.mesh->bind(_commandBuffer);
-        node.mesh->draw(_commandBuffer, _currentFrame, nodeId);
-    }
+    _quad.draw(_commandBuffer, _currentFrame);
 }

@@ -184,6 +184,23 @@ void Mesh::draw(
     vkCmdDrawIndexed(commandBuffer, _nIndices, 1, 0, 0, 0);
 }
 
+void Mesh::draw(VkCommandBuffer commandBuffer, uint32_t currentFrame) const
+{
+    if (_material == nullptr) return;
+
+    // Bind material
+    if (_material != nullptr)
+        _material->bind(commandBuffer, currentFrame);
+
+//    auto pipelineLayout = _material->getPipeline()->getPipelineLayout();
+//
+//    uint32_t offset = uniformId * padUniformBufferSize(_physicalDeviceProperties, sizeof(gu2::UniformBufferObject));
+//    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, objectDescriptorSetId, 1,
+//                            &_descriptorSets[currentFrame], 1, &offset);
+
+    vkCmdDrawIndexed(commandBuffer, _nIndices, 1, 0, 0, 0);
+}
+
 void Mesh::createUniformBuffers(
     VkPhysicalDevice physicalDevice,
     VkDevice device,

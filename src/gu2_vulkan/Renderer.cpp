@@ -25,7 +25,8 @@ Renderer::Renderer(RendererSettings settings) :
     _settings           (settings),
     _framebufferResized (false),
     _currentFrame       (0),
-    _compositePass      ({_settings.device})
+    _geometryPass       ({_settings.device}),
+    _compositePass      ({_settings.device}, _settings.physicalDevice)
 {
     // Store the device properties in local struct
     vkGetPhysicalDeviceProperties(_settings.physicalDevice, &_physicalDeviceProperties);
@@ -34,6 +35,11 @@ Renderer::Renderer(RendererSettings settings) :
     createCommandBuffers();
     createSwapChain();
     createSyncObjects();
+
+    createGBufferResources();
+    _geometryPass.setOutputAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, _baseColorAttachment);
+    _geometryPass.setOutputAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, _depthAttachment);
+    _geometryPass.build();
 }
 
 Renderer::~Renderer()
@@ -85,7 +91,7 @@ void Renderer::createDepthResources()
         _depthImage, _depthImageMemory);
     _depthAttachment = AttachmentHandle{
         {
-            .format = gu2::findDepthFormat(_settings.physicalDevice),
+            .format = depthFormat,
             .samples = VK_SAMPLE_COUNT_1_BIT,
             .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
             .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -94,17 +100,44 @@ void Renderer::createDepthResources()
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
             .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
         },
-        {
-            .attachment = 1,
-            .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-        },
-        gu2::createImageView(_settings.device, _depthImage, depthFormat,
-            VK_IMAGE_ASPECT_DEPTH_BIT, 1),
+        {},
+        gu2::createImageView(_settings.device, _depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1),
         _swapChainExtent
     };
 
     gu2::transitionImageLayout(_settings.device, _commandPool, _settings.graphicsQueue, _depthImage,
         depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
+}
+
+void Renderer::createGBufferResources()
+{
+    auto baseColorFormat = findSupportedFormat(_settings.physicalDevice,
+        {VK_FORMAT_R32G32B32A32_SFLOAT}, // TODO probably way too overkill
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
+    );
+    gu2::createImage(_settings.physicalDevice, _settings.device, _swapChainExtent.width, _swapChainExtent.height, 1,
+        baseColorFormat,
+        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        _baseColorImage, _baseColorImageMemory);
+    _baseColorAttachment = AttachmentHandle{
+        {
+            .format = baseColorFormat,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+        },
+        {},
+        gu2::createImageView(_settings.device, _baseColorImage, baseColorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1),
+        _swapChainExtent
+    };
+
+//    gu2::transitionImageLayout(_settings.device, _commandPool, _settings.graphicsQueue, _baseColorImage,
+//        baseColorFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 1);
 }
 
 void Renderer::createSwapChain()
@@ -177,10 +210,7 @@ void Renderer::createSwapChain()
                 .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
             },
-            {
-                .attachment = 0,
-                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-            },
+            {},
             gu2::createImageView(_settings.device, _swapChainObjects[i].image, _swapChainImageFormat,
                 VK_IMAGE_ASPECT_COLOR_BIT, 1),
             _swapChainExtent
@@ -193,6 +223,10 @@ void Renderer::createSwapChain()
 
 void Renderer::cleanupSwapChain()
 {
+    vkDestroyImageView(_settings.device, _baseColorAttachment.imageView, nullptr);
+    vkDestroyImage(_settings.device, _baseColorImage, nullptr);
+    vkFreeMemory(_settings.device, _baseColorImageMemory, nullptr);
+
     vkDestroyImageView(_settings.device, _depthAttachment.imageView, nullptr);
     vkDestroyImage(_settings.device, _depthImage, nullptr);
     vkFreeMemory(_settings.device, _depthImageMemory, nullptr);
@@ -214,11 +248,17 @@ void Renderer::recreateSwapChain()
     _framebufferResized = false;
 }
 
+void Renderer::createGeometryPass()
+{
+    _geometryPass.setOutputAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, _baseColorAttachment);
+}
+
 void Renderer::createCompositePass()
 {
+    _compositePass.setInputAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, _baseColorAttachment);
     for (size_t i=0; i<_swapChainObjects.size(); ++i)
-        _compositePass.setOutputAttachment(_swapChainObjects[i].colorAttachment, i);
-    _compositePass.setOutputAttachment(_depthAttachment);
+        _compositePass.setOutputAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            _swapChainObjects[i].colorAttachment, i);
     _compositePass.build();
 }
 
@@ -273,11 +313,9 @@ bool Renderer::render(const Scene& scene, VkQueue presentQueue)
     }
 
     // Render passes
-    _compositePass.setScene(scene);
-    dynamic_cast<RenderPass*>(&_compositePass)->render(_commandBuffers[_currentFrame], swapChainImageId,
-        _currentFrame);
-
-    vkCmdEndRenderPass(_commandBuffers[_currentFrame]);
+    _geometryPass.setScene(scene);
+    dynamic_cast<RenderPass*>(&_geometryPass)->render(_commandBuffers[_currentFrame], _currentFrame, 0);
+    dynamic_cast<RenderPass*>(&_compositePass)->render(_commandBuffers[_currentFrame], _currentFrame, swapChainImageId);
 
     if (vkEndCommandBuffer(_commandBuffers[_currentFrame]) != VK_SUCCESS) {
         throw std::runtime_error("Failed to record command buffer!");
@@ -336,9 +374,9 @@ uint64_t Renderer::getCurrentFrame() const
     return _currentFrame;
 }
 
-VkRenderPass Renderer::getRenderPass() const
+VkRenderPass Renderer::getGeometryRenderPass() const
 {
-    return _compositePass._renderPass;
+    return _geometryPass._renderPass;
 }
 
 VkExtent2D Renderer::getSwapChainExtent() const
