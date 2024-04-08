@@ -113,9 +113,11 @@ void Material::createDescriptorSetLayouts(DescriptorManager* descriptorManager)
     }
 
     // TODO replace this hack that turns object descriptor UBO types to dynamic
-    for (auto& binding : _descriptorSetLayoutInfos.at(objectDescriptorSetId).bindings) {
-        if (binding.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-            binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    if (_descriptorSetLayoutInfos.size() > objectDescriptorSetId) {
+        for (auto& binding: _descriptorSetLayoutInfos.at(objectDescriptorSetId).bindings) {
+            if (binding.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+                binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        }
     }
 
     // Create new layouts
