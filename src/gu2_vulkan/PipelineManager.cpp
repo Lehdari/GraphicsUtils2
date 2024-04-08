@@ -43,3 +43,25 @@ Pipeline* PipelineManager::getPipeline(
 
     return &pipelineIter->second;
 }
+
+Pipeline* PipelineManager::getPipeline(
+    gu2::PipelineSettings pipelineSettings,
+    const Shader* vertexShader,
+    const Shader* fragmentShader,
+    const std::vector<DescriptorSetLayoutHandle>& descriptorSetLayouts
+) {
+    auto key = std::make_pair(vertexShader, fragmentShader);
+    auto pipelineIter = _pipelines.find(key);
+    if (pipelineIter == _pipelines.end()) { // no such pipeline, make a new one
+        pipelineSettings.vertShaderModule = vertexShader->getShaderModule();
+        pipelineSettings.fragShaderModule = fragmentShader->getShaderModule();
+        for (const auto& descriptorSetLayout : descriptorSetLayouts)
+            pipelineSettings.descriptorSetLayouts.emplace_back(descriptorSetLayout);
+
+        auto [newPipelineIter, _] = _pipelines.emplace(key, pipelineSettings);
+
+        return &newPipelineIter->second;
+    }
+
+    return &pipelineIter->second;
+}

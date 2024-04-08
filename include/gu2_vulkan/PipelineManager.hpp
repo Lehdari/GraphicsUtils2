@@ -38,18 +38,26 @@ class Shader;
 
 class PipelineManager {
 public:
-    void setDefaultPipelineSettings(const gu2::PipelineSettings& defaultPipelineSettings);
+    void setDefaultPipelineSettings(const PipelineSettings& defaultPipelineSettings);
 
     Pipeline* getPipeline(
         const Shader* vertexShader,
         const Shader* fragmentShader,
         const std::vector<DescriptorSetLayoutHandle>& descriptorSetLayouts,
-        const VkPipelineVertexInputStateCreateInfo& vertexInputInfo);
+        const VkPipelineVertexInputStateCreateInfo& vertexInputInfo
+    );
+
+    Pipeline* getPipeline(
+        PipelineSettings pipelineSettings,
+        const Shader* vertexShader,
+        const Shader* fragmentShader,
+        const std::vector<DescriptorSetLayoutHandle>& descriptorSetLayouts
+    );
 
 private:
     using PipelineStorage = std::unordered_map<std::pair<const Shader*, const Shader*>, Pipeline, pair_hash>;
-    PipelineStorage         _pipelines;
-    gu2::PipelineSettings   _defaultPipelineSettings;
+    PipelineStorage     _pipelines;
+    PipelineSettings    _defaultPipelineSettings;
 };
 
 
