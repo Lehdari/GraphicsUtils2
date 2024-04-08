@@ -25,6 +25,7 @@ namespace gu2 {
 
 class GLTFLoader;
 class Pipeline;
+class PipelineSettings;
 class PipelineManager;
 class Texture;
 class VulkanSettings;
@@ -42,7 +43,9 @@ public:
 
     void createPipeline(
         PipelineManager* pipelineManager,
-        const VkPipelineVertexInputStateCreateInfo& vertexInputInfo);
+        const VkPipelineVertexInputStateCreateInfo& vertexInputInfo
+    );
+    void createPipeline(PipelineManager* pipelineManager, const PipelineSettings& pipelineSettings);
 
     inline const Pipeline* getPipeline() const noexcept { return _pipeline; }
 

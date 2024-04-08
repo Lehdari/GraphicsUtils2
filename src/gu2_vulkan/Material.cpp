@@ -134,6 +134,13 @@ void Material::createPipeline(
     _pipeline = pipelineManager->getPipeline(_vertexShader, _fragmentShader, _descriptorSetLayouts, vertexInputInfo);
 }
 
+void Material::createPipeline(
+    PipelineManager* pipelineManager,
+    const PipelineSettings& pipelineSettings
+) {
+    _pipeline = pipelineManager->getPipeline(pipelineSettings, _vertexShader, _fragmentShader, _descriptorSetLayouts);
+}
+
 void Material::addUniform(uint32_t set, uint32_t binding, const Texture& texture)
 {
     // TODO add check for layout correctness (set, binding, type) (_descriptorSetLayoutInfos)
