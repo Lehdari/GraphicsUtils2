@@ -20,8 +20,9 @@ namespace gu2 {
 
 
 // Descriptor set IDs for dedicated scopes
-constexpr uint32_t materialDescriptorSetId  {2};
-constexpr uint32_t objectDescriptorSetId    {3};
+constexpr uint32_t renderPassDescriptorSetId    {1};
+constexpr uint32_t materialDescriptorSetId      {2};
+constexpr uint32_t objectDescriptorSetId        {3};
 
 
 struct DescriptorSetLayoutInfo {
