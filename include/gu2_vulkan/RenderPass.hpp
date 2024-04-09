@@ -34,32 +34,55 @@ public:
     RenderPass& operator=(RenderPass&&) = delete;
     ~RenderPass();
 
-
     // Interface for setting attachments
     // Interface for defining dependent resources
     // Abstract interface for rendering
 
-    void setOutputAttachment(const AttachmentHandle& attachment, uint32_t swapChainImageId=0);
+    void setInputAttachment(
+        uint32_t attachmentId,
+        VkImageLayout layout,
+        const AttachmentHandle& attachment
+    );
+    void setOutputAttachment(
+        uint32_t attachmentId,
+        VkImageLayout layout,
+        const AttachmentHandle& attachment,
+        uint32_t swapChainImageId=0
+    );
+
+    inline VkRenderPass getRenderPass() const noexcept { return _renderPass; }
+    inline uint32_t getOutputColorAttachmentsCount() const noexcept { return _nColorAttachments; }
 
     void build();
+    virtual void buildDerived() {};
     virtual void render() = 0;
 
     friend class Renderer; // TODO change to RenderGraph
 
 protected:
-    RenderPassSettings  _settings;
-    VkCommandBuffer     _commandBuffer; // active command buffer
-    uint64_t            _currentFrame;
-
-private:
     enum class AttachmentType {
         COLOR,
         DEPTH,
         UNKNOWN
     };
 
-    static AttachmentType getAttachmentType(const AttachmentHandle* attachment);
+    using OutputAttachmentStorage = std::unordered_map<uint32_t, std::vector<AttachmentHandle>>;
+    using InputAttachmentStorage = std::unordered_map<uint32_t, AttachmentHandle>;
 
+    static AttachmentType getAttachmentType(const AttachmentHandle& attachment);
+
+    RenderPassSettings          _settings;
+    bool                        _addLayoutTransitionDependency;
+    VkCommandBuffer             _commandBuffer; // active command buffer
+    uint64_t                    _currentFrame;
+    VkRenderPass                _renderPass;
+    InputAttachmentStorage      _inputAttachments;
+    OutputAttachmentStorage     _outputAttachments;
+    VkExtent2D                  _outputExtent;
+    uint32_t                    _nSwapChainImages;
+    std::vector<VkFramebuffer>  _framebuffers; // Typically contains just one, unless output is to swap chain
+
+private:
     void createRenderPass(
         const std::vector<VkAttachmentReference>& colorAttachmentReferences,
         const VkAttachmentReference* depthAttachmentReference,
@@ -69,15 +92,10 @@ private:
     void destroyFramebuffers();
 
     // Called from RenderGraph
-    void render(VkCommandBuffer commandBuffer, uint32_t swapChainImageId, uint64_t currentFrame);
+    void render(VkCommandBuffer commandBuffer, uint64_t currentFrame, uint32_t swapChainImageId=0);
 
-    using AttachmentStorage = std::unordered_map<uint32_t, std::vector<const AttachmentHandle*>>;
-
-    AttachmentStorage           _outputAttachments;
-    VkExtent2D                  _outputExtent;
-    uint32_t                    _nSwapChainImages;
-    VkRenderPass                _renderPass;
-    std::vector<VkFramebuffer>  _framebuffers; // Typically contains just one, unless output is to swap chain
+    std::vector<VkClearValue>   _clearValues;
+    uint32_t                    _nColorAttachments;
 };
 
 

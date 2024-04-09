@@ -263,7 +263,7 @@ void createFromGLTF(
                 auto& shader = shaders->back();
                 if (requiredVertexAttributes.size() < 5)
                     shader.addMacroDefinition("DISABLE_IN_TEX_COORD_1", "true");
-                shader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "vertex/pbr.glsl");
+                shader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "vertex/pbr_gbuffer.glsl");
             }
 
             printf("requiredVertexAttributes.size(): %lu vertexShaderId: %ld\n",
@@ -304,9 +304,9 @@ void createFromGLTF(
                     shader.addMacroDefinition("DISABLE_METALLIC_ROUGHNESS", "true");
                 if (std::find(requiredDescriptorBindings.begin(), requiredDescriptorBindings.end(),
                     "normalTexture") == requiredDescriptorBindings.end())
-                    shader.addMacroDefinition("DISABLE_USE_NORMAL_TEXTURE", "true");
+                    shader.addMacroDefinition("DISABLE_NORMAL", "true");
 
-                shader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "fragment/pbr.glsl");
+                shader.loadFromFile(gu2::Path(GU2_SHADER_DIR) / "fragment/pbr_gbuffer.glsl");
             }
 
             printf("requiredDescriptorBindings.size(): %lu fragmentShaderId: %ld\n",
@@ -486,9 +486,9 @@ public:
         _materials.clear();
         _shaders.clear();
         _textures.clear();
+        _renderer.reset();
         _pipelineManager.reset();
         _descriptorManager.reset();
-        _renderer.reset();
         vkDestroyDevice(_vulkanDevice, nullptr);
         if (_vulkanSettings.enableValidationLayers)
             DestroyDebugUtilsMessengerEXT(_vulkanInstance, _vulkanDebugMessenger, nullptr);
@@ -506,25 +506,28 @@ public:
         createSurface();
         selectPhysicalDevice();
         createLogicalDevice();
+
+        _pipelineManager = std::make_unique<gu2::PipelineManager>();
+        _descriptorManager = std::make_unique<gu2::DescriptorManager>(_vulkanDevice);
         gu2::RendererSettings rendererSettings {
             &_vulkanSettings,
             _vulkanPhysicalDevice,
             _vulkanDevice,
             _vulkanSurface,
             _vulkanGraphicsQueue,
-            &_window
+            &_window,
+            _descriptorManager.get(),
+            _pipelineManager.get()
         };
         _renderer = std::make_unique<gu2::Renderer>(rendererSettings);
 
-        _pipelineManager = std::make_unique<gu2::PipelineManager>();
         gu2::PipelineSettings defaultPipelineSettings;
         defaultPipelineSettings.device = _vulkanDevice;
-        defaultPipelineSettings.renderPass = _renderer->getRenderPass();
-        defaultPipelineSettings.colorAttachmentCount = 1;
+        defaultPipelineSettings.renderPass = _renderer->getGeometryRenderPass().getRenderPass();
+        defaultPipelineSettings.colorAttachmentCount = _renderer->getGeometryRenderPass()
+            .getOutputColorAttachmentsCount();
         defaultPipelineSettings.swapChainExtent = _renderer->getSwapChainExtent();
         _pipelineManager->setDefaultPipelineSettings(defaultPipelineSettings);
-
-        _descriptorManager = std::make_unique<gu2::DescriptorManager>(_vulkanDevice);
 
         // Load sponza (TODO move elsewhere)
         gu2::GLTFLoader sponzaLoader;

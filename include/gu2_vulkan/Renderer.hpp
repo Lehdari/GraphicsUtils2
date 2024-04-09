@@ -12,6 +12,7 @@
 
 #include "backend.hpp"
 #include "CompositePass.hpp"
+#include "GeometryPass.hpp"
 #include "gu2_util/MathTypes.hpp"
 
 #include <vulkan/vulkan.h>
@@ -22,7 +23,9 @@
 namespace gu2 {
 
 
+class DescriptorManager;
 class Material;
+class PipelineManager;
 class Texture;
 class Scene;
 class VulkanSettings;
@@ -34,7 +37,9 @@ struct RendererSettings {
     VkDevice                device;
     VkSurfaceKHR            surface;
     VkQueue                 graphicsQueue;
-    WindowObject*           window;
+    WindowObject*           window              {nullptr};
+    DescriptorManager*      descriptorManager   {nullptr};
+    PipelineManager*        pipelineManager     {nullptr};
 };
 
 
@@ -50,19 +55,20 @@ public:
     void createCommandPool();
     void createCommandBuffers();
     void createDepthResources();
+    void createGBufferResources();
     void createSwapChain();
     void cleanupSwapChain();
     void recreateSwapChain();
+    void createGeometryPass();
     void createCompositePass();
     void createSyncObjects();
 
     bool render(const Scene& scene, VkQueue presentQueue);
 
-    VkCommandPool getCommandPool();
-    uint64_t getCurrentFrame() const;
-
-    VkRenderPass getRenderPass() const;
-    VkExtent2D getSwapChainExtent() const;
+    inline VkCommandPool getCommandPool() const noexcept { return _commandPool; }
+    inline uint64_t getCurrentFrame() const noexcept { return _currentFrame; }
+    inline const RenderPass& getGeometryRenderPass() const noexcept { return _geometryPass; }
+    inline VkExtent2D getSwapChainExtent() const noexcept { return _swapChainExtent; }
 
     void framebufferResized();
 
@@ -75,12 +81,25 @@ private:
         AttachmentHandle    colorAttachment {};
     };
 
+    // Layout transition for G-buffer images
+    static void transitionGBufferImageToAttachment(VkImage image, VkCommandBuffer commandBuffer);
+    static void transitionGBufferImageToRead(VkImage image, VkCommandBuffer commandBuffer);
+
     RendererSettings                _settings;
     VkPhysicalDeviceProperties      _physicalDeviceProperties;
 
     VkImage                         _depthImage;
     VkDeviceMemory                  _depthImageMemory;
     AttachmentHandle                _depthAttachment;
+
+    // GBuffer
+    VkImage                         _baseColorImage;
+    VkDeviceMemory                  _baseColorImageMemory;
+    AttachmentHandle                _baseColorAttachment;
+    VkImage                         _normalImage;
+    VkDeviceMemory                  _normalImageMemory;
+    AttachmentHandle                _normalAttachment;
+
     VkSwapchainKHR                  _swapChain;
     VkFormat                        _swapChainImageFormat;
     VkExtent2D                      _swapChainExtent;
@@ -93,6 +112,7 @@ private:
     bool                            _framebufferResized;
     uint64_t                        _currentFrame;
 
+    GeometryPass                    _geometryPass;
     CompositePass                   _compositePass;
 };
 

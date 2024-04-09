@@ -25,7 +25,9 @@ Renderer::Renderer(RendererSettings settings) :
     _settings           (settings),
     _framebufferResized (false),
     _currentFrame       (0),
-    _compositePass      ({_settings.device})
+    _geometryPass       ({_settings.device}),
+    _compositePass      ({_settings.device}, _settings.physicalDevice, _settings.descriptorManager,
+                         _settings.pipelineManager, _settings.vulkanSettings->framesInFlight)
 {
     // Store the device properties in local struct
     vkGetPhysicalDeviceProperties(_settings.physicalDevice, &_physicalDeviceProperties);
@@ -85,7 +87,7 @@ void Renderer::createDepthResources()
         _depthImage, _depthImageMemory);
     _depthAttachment = AttachmentHandle{
         {
-            .format = gu2::findDepthFormat(_settings.physicalDevice),
+            .format = depthFormat,
             .samples = VK_SAMPLE_COUNT_1_BIT,
             .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
             .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -94,17 +96,72 @@ void Renderer::createDepthResources()
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
             .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
         },
-        {
-            .attachment = 1,
-            .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-        },
-        gu2::createImageView(_settings.device, _depthImage, depthFormat,
-            VK_IMAGE_ASPECT_DEPTH_BIT, 1),
+        {},
+        gu2::createImageView(_settings.device, _depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1),
         _swapChainExtent
     };
 
     gu2::transitionImageLayout(_settings.device, _commandPool, _settings.graphicsQueue, _depthImage,
         depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
+}
+
+void Renderer::createGBufferResources()
+{
+    // Base color
+    auto baseColorFormat = findSupportedFormat(_settings.physicalDevice,
+        {VK_FORMAT_R32G32B32A32_SFLOAT}, // TODO probably way too overkill
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
+    );
+    gu2::createImage(_settings.physicalDevice, _settings.device, _swapChainExtent.width, _swapChainExtent.height, 1,
+        baseColorFormat,
+        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        _baseColorImage, _baseColorImageMemory);
+    _baseColorAttachment = AttachmentHandle{
+        .description = {
+            .format = baseColorFormat,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+        },
+        .reference = {},
+        .imageView = gu2::createImageView(_settings.device, _baseColorImage, baseColorFormat,
+            VK_IMAGE_ASPECT_COLOR_BIT, 1),
+        .imageExtent = _swapChainExtent
+    };
+
+    // Normal
+    auto normalFormat = findSupportedFormat(_settings.physicalDevice,
+        {VK_FORMAT_R32G32B32A32_SFLOAT}, // TODO probably way too overkill
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
+    );
+    gu2::createImage(_settings.physicalDevice, _settings.device, _swapChainExtent.width, _swapChainExtent.height, 1,
+        normalFormat,
+        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        _normalImage, _normalImageMemory);
+    _normalAttachment = AttachmentHandle{
+        .description = {
+            .format = normalFormat,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+        },
+        .reference = {},
+        .imageView = gu2::createImageView(_settings.device, _normalImage, normalFormat,
+            VK_IMAGE_ASPECT_COLOR_BIT, 1),
+        .imageExtent = _swapChainExtent
+    };
 }
 
 void Renderer::createSwapChain()
@@ -177,22 +234,30 @@ void Renderer::createSwapChain()
                 .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
             },
-            {
-                .attachment = 0,
-                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-            },
+            {},
             gu2::createImageView(_settings.device, _swapChainObjects[i].image, _swapChainImageFormat,
                 VK_IMAGE_ASPECT_COLOR_BIT, 1),
             _swapChainExtent
         };
     }
 
-    // Composite pass needs to be recreated also (new swapchain attachments)
+    // Create new GBuffer
+    createGBufferResources();
+
+    // Rebuild render passes
+    createGeometryPass();
     createCompositePass();
 }
 
 void Renderer::cleanupSwapChain()
 {
+    vkDestroyImageView(_settings.device, _normalAttachment.imageView, nullptr);
+    vkDestroyImage(_settings.device, _normalImage, nullptr);
+    vkFreeMemory(_settings.device, _normalImageMemory, nullptr);
+    vkDestroyImageView(_settings.device, _baseColorAttachment.imageView, nullptr);
+    vkDestroyImage(_settings.device, _baseColorImage, nullptr);
+    vkFreeMemory(_settings.device, _baseColorImageMemory, nullptr);
+
     vkDestroyImageView(_settings.device, _depthAttachment.imageView, nullptr);
     vkDestroyImage(_settings.device, _depthImage, nullptr);
     vkFreeMemory(_settings.device, _depthImageMemory, nullptr);
@@ -214,11 +279,22 @@ void Renderer::recreateSwapChain()
     _framebufferResized = false;
 }
 
+void Renderer::createGeometryPass()
+{
+    _geometryPass.setOutputAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, _baseColorAttachment);
+    _geometryPass.setOutputAttachment(1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, _normalAttachment);
+    _geometryPass.setOutputAttachment(2, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, _depthAttachment);
+    _geometryPass.build();
+}
+
 void Renderer::createCompositePass()
 {
+    _compositePass.setInputAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, _baseColorAttachment);
+    _compositePass.setInputAttachment(1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, _normalAttachment);
     for (size_t i=0; i<_swapChainObjects.size(); ++i)
-        _compositePass.setOutputAttachment(_swapChainObjects[i].colorAttachment, i);
-    _compositePass.setOutputAttachment(_depthAttachment);
+        _compositePass.setOutputAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            _swapChainObjects[i].colorAttachment, i);
+    _compositePass.createQuad(_commandPool, _settings.graphicsQueue);
     _compositePass.build();
 }
 
@@ -261,25 +337,28 @@ bool Renderer::render(const Scene& scene, VkQueue presentQueue)
 
     // Reset sync objects
     vkResetFences(_settings.device, 1, &_inFlightFences[_currentFrame]);
-    vkResetCommandBuffer(_commandBuffers[_currentFrame], 0);
+    auto commandBuffer = _commandBuffers[_currentFrame];
+    vkResetCommandBuffer(commandBuffer, 0);
 
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = 0; // Optional
     beginInfo.pInheritanceInfo = nullptr; // Optional
 
-    if (vkBeginCommandBuffer(_commandBuffers[_currentFrame], &beginInfo) != VK_SUCCESS) {
+    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
         throw std::runtime_error("Failed to begin recording command buffer!");
     }
 
     // Render passes
-    _compositePass.setScene(scene);
-    dynamic_cast<RenderPass*>(&_compositePass)->render(_commandBuffers[_currentFrame], swapChainImageId,
-        _currentFrame);
+    _geometryPass.setScene(scene);
+    transitionGBufferImageToAttachment(_baseColorImage, commandBuffer);
+    transitionGBufferImageToAttachment(_normalImage, commandBuffer);
+    dynamic_cast<RenderPass*>(&_geometryPass)->render(commandBuffer, _currentFrame, 0);
+    transitionGBufferImageToRead(_baseColorImage, commandBuffer);
+    transitionGBufferImageToRead(_normalImage, commandBuffer);
+    dynamic_cast<RenderPass*>(&_compositePass)->render(commandBuffer, _currentFrame, swapChainImageId);
 
-    vkCmdEndRenderPass(_commandBuffers[_currentFrame]);
-
-    if (vkEndCommandBuffer(_commandBuffers[_currentFrame]) != VK_SUCCESS) {
+    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
         throw std::runtime_error("Failed to record command buffer!");
     }
 
@@ -292,7 +371,7 @@ bool Renderer::render(const Scene& scene, VkQueue presentQueue)
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &_commandBuffers[_currentFrame];
+    submitInfo.pCommandBuffers = &commandBuffer;
     VkSemaphore signalSemaphores[] = {_renderFinishedSemaphores[_currentFrame]}; // is this needed?
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
@@ -326,27 +405,61 @@ bool Renderer::render(const Scene& scene, VkQueue presentQueue)
     return true; // rendering succeeded
 }
 
-VkCommandPool Renderer::getCommandPool()
-{
-    return _commandPool;
-}
-
-uint64_t Renderer::getCurrentFrame() const
-{
-    return _currentFrame;
-}
-
-VkRenderPass Renderer::getRenderPass() const
-{
-    return _compositePass._renderPass;
-}
-
-VkExtent2D Renderer::getSwapChainExtent() const
-{
-    return _swapChainExtent;
-}
-
 void Renderer::framebufferResized()
 {
     _framebufferResized = true;
+}
+
+void Renderer::transitionGBufferImageToAttachment(VkImage image, VkCommandBuffer commandBuffer)
+{
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.srcAccessMask = 0;
+    barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    vkCmdPipelineBarrier(
+        commandBuffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        0,
+        0, nullptr,
+        0, nullptr,
+        1, &barrier
+    );
+}
+
+void Renderer::transitionGBufferImageToRead(VkImage image, VkCommandBuffer commandBuffer)
+{
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    barrier.dstAccessMask = 0;
+
+    vkCmdPipelineBarrier(
+        commandBuffer,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+        0,
+        0, nullptr,
+        0, nullptr,
+        1, &barrier
+    );
 }
