@@ -149,6 +149,9 @@ void Material::addUniform(uint32_t set, uint32_t binding, const Texture& texture
 
 void Material::createDescriptorSets(DescriptorManager* descriptorManager, int framesInFlight)
 {
+    if (_descriptorSetLayouts.size() <= materialDescriptorSetId)
+        return;
+
     // Allocate descriptor sets
     _descriptorSets.clear();
     descriptorManager->allocateDescriptorSets(&_descriptorSets,
@@ -203,12 +206,12 @@ void Material::createDescriptorSets(DescriptorManager* descriptorManager, int fr
         0, nullptr);
 }
 
-void Material::bind(
-    VkCommandBuffer commandBuffer,
-    uint32_t currentFrame
-) const
+void Material::bind(VkCommandBuffer commandBuffer, uint32_t currentFrame) const
 {
     _pipeline->bind(commandBuffer);
+
+    if (_descriptorSets.size() <= currentFrame)
+        return;
 
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline->getPipelineLayout(),
         materialDescriptorSetId, 1, &_descriptorSets[currentFrame], 0, nullptr);

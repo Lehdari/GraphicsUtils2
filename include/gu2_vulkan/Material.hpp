@@ -55,10 +55,7 @@ public:
     // Called after all uniforms have been added
     void createDescriptorSets(DescriptorManager* descriptorManager, int framesInFlight);
 
-    void bind(
-        VkCommandBuffer commandBuffer,
-        uint32_t currentFrame
-    ) const;
+    void bind(VkCommandBuffer commandBuffer, uint32_t currentFrame) const;
 
 private:
     template <typename T_Uniform>
