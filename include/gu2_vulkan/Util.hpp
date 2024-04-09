@@ -476,7 +476,7 @@ inline VkFormat findSupportedFormat(
     VkPhysicalDevice physicalDevice,
     const std::vector<VkFormat>& candidates,
     VkImageTiling tiling,
-    VkFormatFeatureFlags features
+    VkFormatFeatureFlags features = 0x00000000
 ) {
     for (const auto& format : candidates) {
         VkFormatProperties props;
