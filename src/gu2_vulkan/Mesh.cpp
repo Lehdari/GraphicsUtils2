@@ -33,6 +33,7 @@ Mesh::Mesh(VkPhysicalDevice physicalDevice, VkDevice device) :
     _physicalDevice (physicalDevice),
     _device         (device),
     _nIndices       (0),
+    _indexType      (VK_INDEX_TYPE_UINT16),
     _material       (nullptr)
 {
     // Store the device properties in local struct
@@ -161,7 +162,7 @@ void Mesh::bind(VkCommandBuffer commandBuffer) const
     std::vector<VkDeviceSize> offsets(_vertexAttributeBuffers.size(), 0); // TODO don't generate this every bind
     vkCmdBindVertexBuffers(commandBuffer, 0, _vertexAttributeBuffers.size(), _vertexAttributeBuffers.data(),
         offsets.data());
-    vkCmdBindIndexBuffer(commandBuffer, _indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindIndexBuffer(commandBuffer, _indexBuffer, 0, _indexType);
 }
 
 void Mesh::draw(
