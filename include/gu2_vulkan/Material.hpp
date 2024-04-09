@@ -39,6 +39,7 @@ public:
     void setFragmentShader(const Shader& shader); // TODO replace with generic addShader
 
     void createDescriptorSetLayouts(DescriptorManager* descriptorManager);
+    inline const std::vector<DescriptorSetLayoutInfo>& getDescriptorSetLayoutInfos() const noexcept;
     inline const std::vector<DescriptorSetLayoutHandle>& getDescriptorSetLayouts() const noexcept;
 
     void createPipeline(
@@ -78,6 +79,11 @@ private:
     std::vector<DescriptorSetHandle>        _descriptorSets;
 };
 
+
+const std::vector<DescriptorSetLayoutInfo>& Material::getDescriptorSetLayoutInfos() const noexcept
+{
+    return _descriptorSetLayoutInfos;
+}
 
 const std::vector<DescriptorSetLayoutHandle>& Material::getDescriptorSetLayouts() const noexcept
 {
