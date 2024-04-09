@@ -185,6 +185,17 @@ void Mesh::draw(
     vkCmdDrawIndexed(commandBuffer, _nIndices, 1, 0, 0, 0);
 }
 
+void Mesh::draw(VkCommandBuffer commandBuffer, uint32_t currentFrame) const
+{
+    if (_material == nullptr) return;
+
+    // Bind material
+    if (_material != nullptr)
+        _material->bind(commandBuffer, currentFrame);
+
+    vkCmdDrawIndexed(commandBuffer, _nIndices, 1, 0, 0, 0);
+}
+
 void Mesh::createUniformBuffers(
     VkPhysicalDevice physicalDevice,
     VkDevice device,
