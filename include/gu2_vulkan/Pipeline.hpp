@@ -33,6 +33,7 @@ struct PipelineSettings {
 
     // Renderer info
     VkRenderPass                            renderPass                  {nullptr};
+    uint32_t                                colorAttachmentCount        {0};
     VkExtent2D                              swapChainExtent;
 
     // Shader modules

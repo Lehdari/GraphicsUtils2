@@ -520,6 +520,7 @@ public:
         gu2::PipelineSettings defaultPipelineSettings;
         defaultPipelineSettings.device = _vulkanDevice;
         defaultPipelineSettings.renderPass = _renderer->getRenderPass();
+        defaultPipelineSettings.colorAttachmentCount = 1;
         defaultPipelineSettings.swapChainExtent = _renderer->getSwapChainExtent();
         _pipelineManager->setDefaultPipelineSettings(defaultPipelineSettings);
 
