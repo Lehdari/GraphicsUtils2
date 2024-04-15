@@ -53,6 +53,7 @@ public:
     void createTextureImageView();
     void createTextureSampler();
 
+    inline VkImage getImage() const noexcept { return _image; };
     inline VkImageView getImageView() const noexcept { return _imageView; };
     inline VkSampler getSampler() const noexcept { return _sampler; };
 
