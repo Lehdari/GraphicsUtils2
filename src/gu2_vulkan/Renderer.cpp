@@ -23,6 +23,9 @@ using namespace gu2;
 
 Renderer::Renderer(RendererSettings settings) :
     _settings           (settings),
+    _depthTexture       ({_settings.physicalDevice, _settings.device}),
+    _baseColorTexture   ({_settings.physicalDevice, _settings.device}),
+    _normalTexture      ({_settings.physicalDevice, _settings.device}),
     _framebufferResized (false),
     _currentFrame       (0),
     _geometryPass       ({_settings.device}),
@@ -81,12 +84,12 @@ void Renderer::createCommandBuffers()
 void Renderer::createDepthResources()
 {
     auto depthFormat = findDepthFormat(_settings.physicalDevice);
-    gu2::createImage(_settings.physicalDevice, _settings.device,
-        _swapChainExtent.width, _swapChainExtent.height, 1, depthFormat,
+    _depthTexture.create(
+        _swapChainExtent.width, _swapChainExtent.height, depthFormat,
         VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        _depthImage, _depthImageMemory);
+        VK_IMAGE_ASPECT_DEPTH_BIT);
     _depthAttachment = AttachmentHandle{
-        {
+        .description = {
             .format = depthFormat,
             .samples = VK_SAMPLE_COUNT_1_BIT,
             .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -96,13 +99,10 @@ void Renderer::createDepthResources()
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
             .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
         },
-        {},
-        gu2::createImageView(_settings.device, _depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1),
-        _swapChainExtent
+        .reference = {},
+        .imageView = _depthTexture.getImageView(),
+        .imageExtent = _swapChainExtent
     };
-
-    gu2::transitionImageLayout(_settings.device, _commandPool, _settings.graphicsQueue, _depthImage,
-        depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
 }
 
 void Renderer::createGBufferResources()
@@ -113,11 +113,10 @@ void Renderer::createGBufferResources()
         VK_IMAGE_TILING_OPTIMAL,
         VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
     );
-    gu2::createImage(_settings.physicalDevice, _settings.device, _swapChainExtent.width, _swapChainExtent.height, 1,
-        baseColorFormat,
+    _baseColorTexture.create(_swapChainExtent.width, _swapChainExtent.height, baseColorFormat,
         VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        _baseColorImage, _baseColorImageMemory);
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT
+    );
     _baseColorAttachment = AttachmentHandle{
         .description = {
             .format = baseColorFormat,
@@ -130,8 +129,7 @@ void Renderer::createGBufferResources()
             .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
         },
         .reference = {},
-        .imageView = gu2::createImageView(_settings.device, _baseColorImage, baseColorFormat,
-            VK_IMAGE_ASPECT_COLOR_BIT, 1),
+        .imageView = _baseColorTexture.getImageView(),
         .imageExtent = _swapChainExtent
     };
 
@@ -141,11 +139,9 @@ void Renderer::createGBufferResources()
         VK_IMAGE_TILING_OPTIMAL,
         VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
     );
-    gu2::createImage(_settings.physicalDevice, _settings.device, _swapChainExtent.width, _swapChainExtent.height, 1,
-        normalFormat,
+    _normalTexture.create(_swapChainExtent.width, _swapChainExtent.height, normalFormat,
         VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        _normalImage, _normalImageMemory);
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     _normalAttachment = AttachmentHandle{
         .description = {
             .format = normalFormat,
@@ -158,8 +154,7 @@ void Renderer::createGBufferResources()
             .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
         },
         .reference = {},
-        .imageView = gu2::createImageView(_settings.device, _normalImage, normalFormat,
-            VK_IMAGE_ASPECT_COLOR_BIT, 1),
+        .imageView = _normalTexture.getImageView(),
         .imageExtent = _swapChainExtent
     };
 }
@@ -251,20 +246,8 @@ void Renderer::createSwapChain()
 
 void Renderer::cleanupSwapChain()
 {
-    vkDestroyImageView(_settings.device, _normalAttachment.imageView, nullptr);
-    vkDestroyImage(_settings.device, _normalImage, nullptr);
-    vkFreeMemory(_settings.device, _normalImageMemory, nullptr);
-    vkDestroyImageView(_settings.device, _baseColorAttachment.imageView, nullptr);
-    vkDestroyImage(_settings.device, _baseColorImage, nullptr);
-    vkFreeMemory(_settings.device, _baseColorImageMemory, nullptr);
-
-    vkDestroyImageView(_settings.device, _depthAttachment.imageView, nullptr);
-    vkDestroyImage(_settings.device, _depthImage, nullptr);
-    vkFreeMemory(_settings.device, _depthImageMemory, nullptr);
-
-    for (auto& imageData : _swapChainObjects) {
+    for (auto& imageData : _swapChainObjects)
         vkDestroyImageView(_settings.device, imageData.colorAttachment.imageView, nullptr);
-    }
 
     vkDestroySwapchainKHR(_settings.device, _swapChain, nullptr);
 }
@@ -351,11 +334,11 @@ bool Renderer::render(const Scene& scene, VkQueue presentQueue)
 
     // Render passes
     _geometryPass.setScene(scene);
-    transitionGBufferImageToAttachment(_baseColorImage, commandBuffer);
-    transitionGBufferImageToAttachment(_normalImage, commandBuffer);
+    transitionGBufferImageToAttachment(_baseColorTexture, commandBuffer);
+    transitionGBufferImageToAttachment(_normalTexture, commandBuffer);
     dynamic_cast<RenderPass*>(&_geometryPass)->render(commandBuffer, _currentFrame, 0);
-    transitionGBufferImageToRead(_baseColorImage, commandBuffer);
-    transitionGBufferImageToRead(_normalImage, commandBuffer);
+    transitionGBufferImageToRead(_baseColorTexture, commandBuffer);
+    transitionGBufferImageToRead(_normalTexture, commandBuffer);
     dynamic_cast<RenderPass*>(&_compositePass)->render(commandBuffer, _currentFrame, swapChainImageId);
 
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -410,7 +393,7 @@ void Renderer::framebufferResized()
     _framebufferResized = true;
 }
 
-void Renderer::transitionGBufferImageToAttachment(VkImage image, VkCommandBuffer commandBuffer)
+void Renderer::transitionGBufferImageToAttachment(const Texture& texture, VkCommandBuffer commandBuffer)
 {
     VkImageMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -418,7 +401,7 @@ void Renderer::transitionGBufferImageToAttachment(VkImage image, VkCommandBuffer
     barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image;
+    barrier.image = texture.getImage();
     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     barrier.subresourceRange.baseMipLevel = 0;
     barrier.subresourceRange.levelCount = 1;
@@ -437,7 +420,7 @@ void Renderer::transitionGBufferImageToAttachment(VkImage image, VkCommandBuffer
     );
 }
 
-void Renderer::transitionGBufferImageToRead(VkImage image, VkCommandBuffer commandBuffer)
+void Renderer::transitionGBufferImageToRead(const Texture& texture, VkCommandBuffer commandBuffer)
 {
     VkImageMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -445,7 +428,7 @@ void Renderer::transitionGBufferImageToRead(VkImage image, VkCommandBuffer comma
     barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image;
+    barrier.image = texture.getImage();
     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     barrier.subresourceRange.baseMipLevel = 0;
     barrier.subresourceRange.levelCount = 1;

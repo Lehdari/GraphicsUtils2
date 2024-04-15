@@ -13,6 +13,7 @@
 #include "backend.hpp"
 #include "CompositePass.hpp"
 #include "GeometryPass.hpp"
+#include "Texture.hpp"
 #include "gu2_util/MathTypes.hpp"
 
 #include <vulkan/vulkan.h>
@@ -26,7 +27,6 @@ namespace gu2 {
 class DescriptorManager;
 class Material;
 class PipelineManager;
-class Texture;
 class Scene;
 class VulkanSettings;
 
@@ -82,22 +82,19 @@ private:
     };
 
     // Layout transition for G-buffer images
-    static void transitionGBufferImageToAttachment(VkImage image, VkCommandBuffer commandBuffer);
-    static void transitionGBufferImageToRead(VkImage image, VkCommandBuffer commandBuffer);
+    static void transitionGBufferImageToAttachment(const Texture& image, VkCommandBuffer commandBuffer);
+    static void transitionGBufferImageToRead(const Texture& image, VkCommandBuffer commandBuffer);
 
     RendererSettings                _settings;
     VkPhysicalDeviceProperties      _physicalDeviceProperties;
 
-    VkImage                         _depthImage;
-    VkDeviceMemory                  _depthImageMemory;
+    Texture                         _depthTexture;
     AttachmentHandle                _depthAttachment;
 
     // GBuffer
-    VkImage                         _baseColorImage;
-    VkDeviceMemory                  _baseColorImageMemory;
+    Texture                         _baseColorTexture;
     AttachmentHandle                _baseColorAttachment;
-    VkImage                         _normalImage;
-    VkDeviceMemory                  _normalImageMemory;
+    Texture                         _normalTexture;
     AttachmentHandle                _normalAttachment;
 
     VkSwapchainKHR                  _swapChain;
