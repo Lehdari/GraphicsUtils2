@@ -19,6 +19,16 @@ using namespace gu2;
 template<>
 void Texture::createFromImage<uint8_t>(VkCommandPool commandPool, VkQueue queue, const Image<uint8_t>& image)
 {
+    // Destroy potential previous image and image memory
+    if (_image != VK_NULL_HANDLE) {
+        vkDestroyImage(_settings.device, _image, nullptr);
+        _image = VK_NULL_HANDLE;
+    }
+    if (_imageMemory != VK_NULL_HANDLE) {
+        vkFreeMemory(_settings.device, _imageMemory, nullptr);
+        _imageMemory = VK_NULL_HANDLE;
+    }
+
     _imageMipLevels = std::floor(std::log2(std::max(image.width(), image.height()))) + 1;
     VkDeviceSize imageSize = image.nElements() * sizeof(uint8_t);
 
@@ -57,10 +67,10 @@ void Texture::createFromImage<uint8_t>(VkCommandPool commandPool, VkQueue queue,
 
 Texture::Texture(TextureSettings settings) :
     _settings       (std::move(settings)),
-    _image          (nullptr),
-    _imageMemory    (nullptr),
-    _imageView      (nullptr),
-    _sampler        (nullptr)
+    _image          (VK_NULL_HANDLE),
+    _imageMemory    (VK_NULL_HANDLE),
+    _imageView      (VK_NULL_HANDLE),
+    _sampler        (VK_NULL_HANDLE)
 {
     // Store the device properties in local struct
     vkGetPhysicalDeviceProperties(_settings.physicalDevice, &_physicalDeviceProperties);
@@ -68,13 +78,13 @@ Texture::Texture(TextureSettings settings) :
 
 Texture::~Texture()
 {
-    if (_sampler != nullptr)
+    if (_sampler != VK_NULL_HANDLE)
         vkDestroySampler(_settings.device, _sampler, nullptr);
-    if (_imageView != nullptr)
+    if (_imageView != VK_NULL_HANDLE)
         vkDestroyImageView(_settings.device, _imageView, nullptr);
-    if (_image != nullptr)
+    if (_image != VK_NULL_HANDLE)
         vkDestroyImage(_settings.device, _image, nullptr);
-    if (_imageMemory != nullptr)
+    if (_imageMemory != VK_NULL_HANDLE)
         vkFreeMemory(_settings.device, _imageMemory, nullptr);
 }
 
@@ -126,8 +136,10 @@ void Texture::createFromFile(VkCommandPool commandPool, VkQueue queue, const Pat
 void Texture::createTextureImageView()
 {
     // Destroy potential previous image view
-    if (_imageView != nullptr)
+    if (_imageView != VK_NULL_HANDLE) {
         vkDestroyImageView(_settings.device, _imageView, nullptr);
+        _imageView = VK_NULL_HANDLE;
+    }
 
     _imageView = gu2::createImageView(_settings.device, _image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT,
         _imageMipLevels);
@@ -136,8 +148,10 @@ void Texture::createTextureImageView()
 void Texture::createTextureSampler()
 {
     // Destroy potential previous sampler
-    if (_sampler != nullptr)
+    if (_sampler != VK_NULL_HANDLE) {
         vkDestroySampler(_settings.device, _sampler, nullptr);
+        _sampler = VK_NULL_HANDLE;
+    }
 
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
