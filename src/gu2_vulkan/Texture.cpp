@@ -162,13 +162,3 @@ void Texture::createTextureSampler()
         throw std::runtime_error("Failed to create texture sampler!");
     }
 }
-
-VkImageView Texture::getImageView() const
-{
-    return _imageView;
-}
-
-VkSampler Texture::getSampler() const
-{
-    return _sampler;
-}
