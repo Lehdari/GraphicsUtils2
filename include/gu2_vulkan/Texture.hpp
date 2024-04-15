@@ -38,6 +38,15 @@ public:
     Texture& operator=(Texture&&) = default;
     ~Texture();
 
+    void create(
+        uint32_t width,
+        uint32_t height,
+        VkFormat format,
+        VkImageTiling tiling,
+        VkImageUsageFlags usage,
+        VkMemoryPropertyFlags properties,
+        VkImageAspectFlags aspectFlags
+    );
     void createFromFile(VkCommandPool commandPool, VkQueue queue, const Path& filename);
     template<class T_Data>
     void createFromImage(VkCommandPool commandPool, VkQueue queue, const Image<T_Data>& image);
