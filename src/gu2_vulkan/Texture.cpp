@@ -16,45 +16,9 @@
 using namespace gu2;
 
 
-Texture::Texture(TextureSettings settings) :
-    _settings       (std::move(settings)),
-    _image          (nullptr),
-    _imageMemory    (nullptr),
-    _imageView      (nullptr),
-    _sampler        (nullptr)
+template<>
+void Texture::createFromImage<uint8_t>(VkCommandPool commandPool, VkQueue queue, const Image<uint8_t>& image)
 {
-    // Store the device properties in local struct
-    vkGetPhysicalDeviceProperties(_settings.physicalDevice, &_physicalDeviceProperties);
-}
-
-Texture::~Texture()
-{
-    if (_sampler != nullptr)
-        vkDestroySampler(_settings.device, _sampler, nullptr);
-    if (_imageView != nullptr)
-        vkDestroyImageView(_settings.device, _imageView, nullptr);
-    if (_image != nullptr)
-        vkDestroyImage(_settings.device, _image, nullptr);
-    if (_imageMemory != nullptr)
-        vkFreeMemory(_settings.device, _imageMemory, nullptr);
-}
-
-void Texture::loadFromFile(VkCommandPool commandPool, VkQueue queue, const Path& filename)
-{
-    createTextureImage(commandPool, queue, filename);
-    createTextureImageView();
-    createTextureSampler();
-}
-
-void Texture::createTextureImage(VkCommandPool commandPool, VkQueue queue, const Path& filename)
-{
-#if 1   // TODO temporary toggle to prevent expensive conversion
-    Image<uint8_t> image;
-    gu2::convertImage(gu2::readImageFromFile<uint8_t>(filename), image, gu2::ImageFormat::RGBA);
-#else
-    gu2::Image<uint8_t> image(512, 512);
-#endif
-
     _imageMipLevels = std::floor(std::log2(std::max(image.width(), image.height()))) + 1;
     VkDeviceSize imageSize = image.nElements() * sizeof(uint8_t);
 
@@ -88,6 +52,44 @@ void Texture::createTextureImage(VkCommandPool commandPool, VkQueue queue, const
 
     vkDestroyBuffer(_settings.device, stagingBuffer, nullptr);
     vkFreeMemory(_settings.device, stagingBufferMemory, nullptr);
+}
+
+
+Texture::Texture(TextureSettings settings) :
+    _settings       (std::move(settings)),
+    _image          (nullptr),
+    _imageMemory    (nullptr),
+    _imageView      (nullptr),
+    _sampler        (nullptr)
+{
+    // Store the device properties in local struct
+    vkGetPhysicalDeviceProperties(_settings.physicalDevice, &_physicalDeviceProperties);
+}
+
+Texture::~Texture()
+{
+    if (_sampler != nullptr)
+        vkDestroySampler(_settings.device, _sampler, nullptr);
+    if (_imageView != nullptr)
+        vkDestroyImageView(_settings.device, _imageView, nullptr);
+    if (_image != nullptr)
+        vkDestroyImage(_settings.device, _image, nullptr);
+    if (_imageMemory != nullptr)
+        vkFreeMemory(_settings.device, _imageMemory, nullptr);
+}
+
+void Texture::createFromFile(VkCommandPool commandPool, VkQueue queue, const Path& filename)
+{
+#if 1   // TODO temporary toggle to prevent expensive conversion
+    Image<uint8_t> image;
+    gu2::convertImage(gu2::readImageFromFile<uint8_t>(filename), image, gu2::ImageFormat::RGBA);
+#else
+    gu2::Image<uint8_t> image(512, 512);
+#endif
+
+    createFromImage(commandPool, queue, image);
+    createTextureImageView();
+    createTextureSampler();
 }
 
 void Texture::createTextureImageView()

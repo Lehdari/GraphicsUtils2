@@ -205,7 +205,7 @@ void createFromGLTF(
         const auto& imageFilename = gltfImages.at(t.source).filename;
 
         auto& texture = textures->at(i);
-        texture.loadFromFile(commandPool, queue, imageFilename);
+        texture.createFromFile(commandPool, queue, imageFilename);
 
         printf("Added texture %u / %lu from %s\n", i, nTextures, GU2_PATH_TO_STRING(imageFilename));
         fflush(stdout);
