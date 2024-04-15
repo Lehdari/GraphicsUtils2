@@ -23,9 +23,15 @@ template <typename T_Data>
 class Image;
 
 
+struct TextureSettings {
+    VkPhysicalDevice    physicalDevice  {nullptr};
+    VkDevice            device          {nullptr};
+};
+
+
 class Texture {
 public:
-    Texture(VkPhysicalDevice physicalDevice, VkDevice device);
+    Texture(TextureSettings settings = TextureSettings{});
     Texture(const Texture&) = delete;
     Texture(Texture&&) = default;
     Texture& operator=(const Texture&) = delete;
@@ -44,15 +50,14 @@ public:
 
 private:
     // TODO Subject to relocation
-    VkPhysicalDevice                _physicalDevice;
-    VkPhysicalDeviceProperties      _physicalDeviceProperties;
-    VkDevice                        _device;
+    TextureSettings             _settings;
+    VkPhysicalDeviceProperties  _physicalDeviceProperties;
 
-    VkImage                         _image;
-    VkDeviceMemory                  _imageMemory;
-    VkImageView                     _imageView;
-    uint32_t                        _imageMipLevels;
-    VkSampler                       _sampler;
+    VkImage                     _image;
+    VkDeviceMemory              _imageMemory;
+    VkImageView                 _imageView;
+    uint32_t                    _imageMipLevels;
+    VkSampler                   _sampler;
 };
 
 
@@ -64,34 +69,34 @@ void Texture::createFromImage(VkCommandPool commandPool, VkQueue queue, const Im
 
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
-    createBuffer(_physicalDevice, _device, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    createBuffer(_settings.physicalDevice, _settings.device, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
     void* data;
-    vkMapMemory(_device, stagingBufferMemory, 0, imageSize, 0, &data);
+    vkMapMemory(_settings.device, stagingBufferMemory, 0, imageSize, 0, &data);
     memcpy(data, image.data(), static_cast<size_t>(imageSize));
-    vkUnmapMemory(_device, stagingBufferMemory);
+    vkUnmapMemory(_settings.device, stagingBufferMemory);
 
     #pragma omp critical
     {
-        gu2::createImage(_physicalDevice, _device,
+        gu2::createImage(_settings.physicalDevice, _settings.device,
             image.width(), image.height(), _imageMipLevels,
             VK_FORMAT_R8G8B8A8_SRGB,
             VK_IMAGE_TILING_OPTIMAL,
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _image, _imageMemory);
 
-        gu2::transitionImageLayout(_device, commandPool, queue, _image, VK_FORMAT_R8G8B8A8_SRGB,
+        gu2::transitionImageLayout(_settings.device, commandPool, queue, _image, VK_FORMAT_R8G8B8A8_SRGB,
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, _imageMipLevels);
-        gu2::copyBufferToImage(_device, commandPool, queue, stagingBuffer, _image,
+        gu2::copyBufferToImage(_settings.device, commandPool, queue, stagingBuffer, _image,
             static_cast<uint32_t>(image.width()), static_cast<uint32_t>(image.height()));
-        gu2::generateMipmaps(_physicalDevice, _device, commandPool, queue, _image, VK_FORMAT_R8G8B8A8_SRGB,
+        gu2::generateMipmaps(_settings.physicalDevice, _settings.device, commandPool, queue, _image, VK_FORMAT_R8G8B8A8_SRGB,
             image.width(), image.height(), _imageMipLevels);
     }
 
-    vkDestroyBuffer(_device, stagingBuffer, nullptr);
-    vkFreeMemory(_device, stagingBufferMemory, nullptr);
+    vkDestroyBuffer(_settings.device, stagingBuffer, nullptr);
+    vkFreeMemory(_settings.device, stagingBufferMemory, nullptr);
 }
 
 

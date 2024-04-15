@@ -189,7 +189,10 @@ void createFromGLTF(
     auto nTextures = gltfTextures.size();
     textures->clear();
     for (const auto& t : gltfTextures)
-        textures->emplace_back(physicalDevice, device);
+        textures->emplace_back(gu2::TextureSettings{
+            .physicalDevice = physicalDevice,
+            .device=device
+        });
 
     auto& gltfImages = gltfLoader.getImages();
 

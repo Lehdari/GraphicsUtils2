@@ -16,30 +16,27 @@
 using namespace gu2;
 
 
-Texture::Texture(
-    VkPhysicalDevice physicalDevice,
-    VkDevice device) :
-    _physicalDevice (physicalDevice),
-    _device         (device),
+Texture::Texture(TextureSettings settings) :
+    _settings       (std::move(settings)),
     _image          (nullptr),
     _imageMemory    (nullptr),
     _imageView      (nullptr),
     _sampler        (nullptr)
 {
     // Store the device properties in local struct
-    vkGetPhysicalDeviceProperties(_physicalDevice, &_physicalDeviceProperties);
+    vkGetPhysicalDeviceProperties(_settings.physicalDevice, &_physicalDeviceProperties);
 }
 
 Texture::~Texture()
 {
     if (_sampler != nullptr)
-        vkDestroySampler(_device, _sampler, nullptr);
+        vkDestroySampler(_settings.device, _sampler, nullptr);
     if (_imageView != nullptr)
-        vkDestroyImageView(_device, _imageView, nullptr);
+        vkDestroyImageView(_settings.device, _imageView, nullptr);
     if (_image != nullptr)
-        vkDestroyImage(_device, _image, nullptr);
+        vkDestroyImage(_settings.device, _image, nullptr);
     if (_imageMemory != nullptr)
-        vkFreeMemory(_device, _imageMemory, nullptr);
+        vkFreeMemory(_settings.device, _imageMemory, nullptr);
 }
 
 void Texture::loadFromFile(VkCommandPool commandPool, VkQueue queue, const Path& filename)
@@ -63,44 +60,52 @@ void Texture::createTextureImage(VkCommandPool commandPool, VkQueue queue, const
 
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
-    createBuffer(_physicalDevice, _device, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    createBuffer(_settings.physicalDevice, _settings.device, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
     void* data;
-    vkMapMemory(_device, stagingBufferMemory, 0, imageSize, 0, &data);
+    vkMapMemory(_settings.device, stagingBufferMemory, 0, imageSize, 0, &data);
     memcpy(data, image.data(), static_cast<size_t>(imageSize));
-    vkUnmapMemory(_device, stagingBufferMemory);
+    vkUnmapMemory(_settings.device, stagingBufferMemory);
 
     #pragma omp critical
     {
-        gu2::createImage(_physicalDevice, _device,
+        gu2::createImage(_settings.physicalDevice, _settings.device,
             image.width(), image.height(), _imageMipLevels,
             VK_FORMAT_R8G8B8A8_SRGB,
             VK_IMAGE_TILING_OPTIMAL,
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _image, _imageMemory);
 
-        gu2::transitionImageLayout(_device, commandPool, queue, _image, VK_FORMAT_R8G8B8A8_SRGB,
+        gu2::transitionImageLayout(_settings.device, commandPool, queue, _image, VK_FORMAT_R8G8B8A8_SRGB,
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, _imageMipLevels);
-        gu2::copyBufferToImage(_device, commandPool, queue, stagingBuffer, _image,
+        gu2::copyBufferToImage(_settings.device, commandPool, queue, stagingBuffer, _image,
             static_cast<uint32_t>(image.width()), static_cast<uint32_t>(image.height()));
-        gu2::generateMipmaps(_physicalDevice, _device, commandPool, queue, _image, VK_FORMAT_R8G8B8A8_SRGB,
+        gu2::generateMipmaps(_settings.physicalDevice, _settings.device, commandPool, queue, _image, VK_FORMAT_R8G8B8A8_SRGB,
             image.width(), image.height(), _imageMipLevels);
     }
 
-    vkDestroyBuffer(_device, stagingBuffer, nullptr);
-    vkFreeMemory(_device, stagingBufferMemory, nullptr);
+    vkDestroyBuffer(_settings.device, stagingBuffer, nullptr);
+    vkFreeMemory(_settings.device, stagingBufferMemory, nullptr);
 }
 
 void Texture::createTextureImageView()
 {
-    _imageView = gu2::createImageView(_device, _image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT,
+    // Destroy potential previous image view
+    if (_imageView != nullptr)
+        vkDestroyImageView(_settings.device, _imageView, nullptr);
+
+    _imageView = gu2::createImageView(_settings.device, _image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT,
         _imageMipLevels);
 }
 
 void Texture::createTextureSampler()
 {
+    // Destroy potential previous sampler
+    if (_sampler != nullptr)
+        vkDestroySampler(_settings.device, _sampler, nullptr);
+
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     samplerInfo.magFilter = VK_FILTER_LINEAR;
@@ -120,7 +125,7 @@ void Texture::createTextureSampler()
     samplerInfo.minLod = 0.0f;
     samplerInfo.maxLod = (float)_imageMipLevels;
 
-    if (vkCreateSampler(_device, &samplerInfo, nullptr, &_sampler) != VK_SUCCESS) {
+    if (vkCreateSampler(_settings.device, &samplerInfo, nullptr, &_sampler) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create texture sampler!");
     }
 }
