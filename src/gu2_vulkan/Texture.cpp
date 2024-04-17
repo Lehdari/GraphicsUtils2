@@ -88,15 +88,8 @@ Texture::~Texture()
         vkFreeMemory(_settings.device, _imageMemory, nullptr);
 }
 
-void Texture::create(
-    uint32_t width,
-    uint32_t height,
-    VkFormat format,
-    VkImageTiling tiling,
-    VkImageUsageFlags usage,
-    VkMemoryPropertyFlags properties,
-    VkImageAspectFlags aspectFlags
-) {
+void Texture::create(TextureProperties properties)
+{
     // Destroy potential previous image and image memory
     if (_image != VK_NULL_HANDLE) {
         vkDestroyImage(_settings.device, _image, nullptr);
@@ -107,8 +100,10 @@ void Texture::create(
         _imageMemory = VK_NULL_HANDLE;
     }
 
-    gu2::createImage(_settings.physicalDevice, _settings.device, width, height, 1, format, tiling, usage, properties,
-        _image, _imageMemory);
+    _properties = std::move(properties);
+
+    gu2::createImage(_settings.physicalDevice, _settings.device, _properties.width, _properties.height, 1,
+        _properties.format, _properties.tiling, _properties.usage, _properties.memoryProperties, _image, _imageMemory);
 
     // Destroy potential previous image view
     if (_imageView != VK_NULL_HANDLE) {
@@ -116,7 +111,7 @@ void Texture::create(
         _imageView = VK_NULL_HANDLE;
     }
 
-    _imageView = gu2::createImageView(_settings.device, _image, format, aspectFlags, 1);
+    _imageView = gu2::createImageView(_settings.device, _image, _properties.format, _properties.aspectFlags, 1);
 }
 
 void Texture::createFromFile(VkCommandPool commandPool, VkQueue queue, const Path& filename)

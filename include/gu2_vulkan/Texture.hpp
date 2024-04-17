@@ -29,6 +29,17 @@ struct TextureSettings {
 };
 
 
+struct TextureProperties {
+    uint32_t                width               {0};
+    uint32_t                height              {0};
+    VkFormat                format              {VK_FORMAT_MAX_ENUM};
+    VkImageTiling           tiling              {VK_IMAGE_TILING_MAX_ENUM};
+    VkImageUsageFlags       usage               {VK_IMAGE_USAGE_FLAG_BITS_MAX_ENUM};
+    VkMemoryPropertyFlags   memoryProperties    {VK_MEMORY_PROPERTY_FLAG_BITS_MAX_ENUM};
+    VkImageAspectFlags      aspectFlags         {VK_IMAGE_ASPECT_FLAG_BITS_MAX_ENUM};
+};
+
+
 class Texture {
 public:
     Texture(TextureSettings settings = TextureSettings{});
@@ -38,29 +49,23 @@ public:
     Texture& operator=(Texture&&) = default;
     ~Texture();
 
-    void create(
-        uint32_t width,
-        uint32_t height,
-        VkFormat format,
-        VkImageTiling tiling,
-        VkImageUsageFlags usage,
-        VkMemoryPropertyFlags properties,
-        VkImageAspectFlags aspectFlags
-    );
+    void create(TextureProperties properties);
     void createFromFile(VkCommandPool commandPool, VkQueue queue, const Path& filename);
     template<class T_Data>
     void createFromImage(VkCommandPool commandPool, VkQueue queue, const Image<T_Data>& image);
     void createTextureImageView();
     void createTextureSampler();
 
-    inline VkImage getImage() const noexcept { return _image; };
-    inline VkImageView getImageView() const noexcept { return _imageView; };
-    inline VkSampler getSampler() const noexcept { return _sampler; };
+    inline const TextureProperties& getProperties() const noexcept { return _properties; }
+    inline VkImage getImage() const noexcept { return _image; }
+    inline VkImageView getImageView() const noexcept { return _imageView; }
+    inline VkSampler getSampler() const noexcept { return _sampler; }
 
 private:
     // TODO Subject to relocation
     TextureSettings             _settings;
     VkPhysicalDeviceProperties  _physicalDeviceProperties;
+    TextureProperties           _properties;
 
     VkImage                     _image;
     VkDeviceMemory              _imageMemory;

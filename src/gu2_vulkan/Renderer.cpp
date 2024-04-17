@@ -84,10 +84,15 @@ void Renderer::createCommandBuffers()
 void Renderer::createDepthResources()
 {
     auto depthFormat = findDepthFormat(_settings.physicalDevice);
-    _depthTexture.create(
-        _swapChainExtent.width, _swapChainExtent.height, depthFormat,
-        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        VK_IMAGE_ASPECT_DEPTH_BIT);
+    _depthTexture.create(TextureProperties{
+        .width = _swapChainExtent.width,
+        .height = _swapChainExtent.height,
+        .format = depthFormat,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        .memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        .aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT
+    });
     _depthAttachment = AttachmentHandle{
         .description = {
             .format = depthFormat,
@@ -113,10 +118,15 @@ void Renderer::createGBufferResources()
         VK_IMAGE_TILING_OPTIMAL,
         VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
     );
-    _baseColorTexture.create(_swapChainExtent.width, _swapChainExtent.height, baseColorFormat,
-        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT
-    );
+    _baseColorTexture.create(TextureProperties{
+        .width = _swapChainExtent.width,
+        .height = _swapChainExtent.height,
+        .format = baseColorFormat,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        .memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        .aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT
+    });
     _baseColorAttachment = AttachmentHandle{
         .description = {
             .format = baseColorFormat,
@@ -139,9 +149,14 @@ void Renderer::createGBufferResources()
         VK_IMAGE_TILING_OPTIMAL,
         VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
     );
-    _normalTexture.create(_swapChainExtent.width, _swapChainExtent.height, normalFormat,
-        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    _normalTexture.create(TextureProperties{
+        .width = _swapChainExtent.width,
+        .height = _swapChainExtent.height,
+        .format = normalFormat,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        .memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        .aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT});
     _normalAttachment = AttachmentHandle{
         .description = {
             .format = normalFormat,
