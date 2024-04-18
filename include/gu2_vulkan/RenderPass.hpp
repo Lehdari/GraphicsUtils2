@@ -20,6 +20,9 @@
 namespace gu2 {
 
 
+class Texture;
+
+
 struct RenderPassSettings {
     VkDevice    device;
 };
@@ -38,15 +41,19 @@ public:
     // Interface for defining dependent resources
     // Abstract interface for rendering
 
+    void setOutputExtent(VkExtent2D extent);
     void setInputAttachment(
         uint32_t attachmentId,
-        VkImageLayout layout,
-        const AttachmentHandle& attachment
+        const Texture& texture
     );
     void setOutputAttachment(
         uint32_t attachmentId,
-        VkImageLayout layout,
-        const AttachmentHandle& attachment,
+        const Texture& texture
+    );
+    void setOutputAttachment( // For swap chain images
+        uint32_t attachmentId,
+        VkImage image,
+        VkFormat format,
         uint32_t swapChainImageId=0
     );
 

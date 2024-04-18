@@ -9,6 +9,7 @@
 //
 
 #include "RenderPass.hpp"
+#include "Texture.hpp"
 
 #include <cassert>
 #include <stdexcept>
@@ -35,33 +36,105 @@ RenderPass::~RenderPass()
         vkDestroyRenderPass(_settings.device, _renderPass, nullptr);
 }
 
+void RenderPass::setOutputExtent(VkExtent2D extent)
+{
+    _outputExtent = extent;
+}
+
 void RenderPass::setInputAttachment(
     uint32_t attachmentId,
-    VkImageLayout layout,
-    const AttachmentHandle& attachment
+    const Texture& texture
 ) {
-    if (attachment.imageView == nullptr)
-        throw std::runtime_error("Attachment contains no imageView");
+    if (texture.getImageView() == VK_NULL_HANDLE)
+        throw std::runtime_error("Texture has no imageView");
 
-    _inputAttachments[attachmentId] = attachment;
-    _inputAttachments[attachmentId].reference = {attachmentId, layout};
+    VkImageLayout layout;
+    if ((texture.getProperties().usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) > 0)
+        layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    else if ((texture.getProperties().usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) > 0)
+        layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    else
+        throw std::runtime_error("Unsupported image usage for attachment");
+
+    _inputAttachments[attachmentId] = AttachmentHandle(
+        {
+            .format = texture.getProperties().format,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout = layout
+        },
+        {attachmentId, layout},
+        texture.getImageView()
+    );
 }
 
 void RenderPass::setOutputAttachment(
     uint32_t attachmentId,
-    VkImageLayout layout,
-    const AttachmentHandle& attachment,
+    const Texture& texture
+) {
+    if (texture.getImageView() == VK_NULL_HANDLE)
+        throw std::runtime_error("Texture has no imageView");
+
+    VkImageLayout layout;
+    if ((texture.getProperties().usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) > 0)
+        layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    else if ((texture.getProperties().usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) > 0)
+        layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    else
+        throw std::runtime_error("Unsupported image usage for attachment");
+
+    if (texture.getProperties().width != _outputExtent.width ||
+        texture.getProperties().height != _outputExtent.height)
+        throw std::runtime_error("Output attachment extent does not match render pass output extent");
+
+    auto& attachments = _outputAttachments[attachmentId];
+    attachments.clear();
+    attachments.emplace_back(
+        VkAttachmentDescription{
+            .format = texture.getProperties().format,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout = layout
+        },
+        VkAttachmentReference{attachmentId, layout},
+        texture.getImageView()
+    );
+    _nSwapChainImages = 1;
+}
+
+void RenderPass::setOutputAttachment(
+    uint32_t attachmentId,
+    VkImage image,
+    VkFormat format,
     uint32_t swapChainImageId
 ) {
-    if (attachment.imageView == nullptr)
-        throw std::runtime_error("Attachment contains no imageView");
+    AttachmentHandle attachment(
+        VkAttachmentDescription{
+            .format = format,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+        },
+        VkAttachmentReference{attachmentId, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+        gu2::createImageView(_settings.device, image, format, VK_IMAGE_ASPECT_COLOR_BIT, 1),
+        _settings.device
+    );
 
     auto& attachments = _outputAttachments[attachmentId];
     attachments.resize(std::max<size_t>(swapChainImageId+1, attachments.size()));
-    attachments[swapChainImageId] = attachment;
-    attachments[swapChainImageId].reference = {attachmentId, layout};
-    _outputExtent = attachment.imageExtent; // TODO check this too
-    // TODO maybe check that other attachment parameters (such as reference.layout) match to the ones already in vector
+    attachments[swapChainImageId] = std::move(attachment);
     _nSwapChainImages = std::max(_nSwapChainImages, swapChainImageId+1);
 }
 

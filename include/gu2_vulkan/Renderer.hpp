@@ -78,7 +78,6 @@ private:
     // Helper struct for wrapping all the stuff that needs to be replicated for each swapchain image
     struct SwapChainData {
         VkImage             image           {nullptr};
-        AttachmentHandle    colorAttachment {};
     };
 
     // Layout transition for G-buffer images
@@ -89,13 +88,10 @@ private:
     VkPhysicalDeviceProperties      _physicalDeviceProperties;
 
     Texture                         _depthTexture;
-    AttachmentHandle                _depthAttachment;
 
     // GBuffer
     Texture                         _baseColorTexture;
-    AttachmentHandle                _baseColorAttachment;
     Texture                         _normalTexture;
-    AttachmentHandle                _normalAttachment;
 
     VkSwapchainKHR                  _swapChain;
     VkFormat                        _swapChainImageFormat;

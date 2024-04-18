@@ -93,21 +93,6 @@ void Renderer::createDepthResources()
         .memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         .aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT
     });
-    _depthAttachment = AttachmentHandle{
-        .description = {
-            .format = depthFormat,
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-        },
-        .reference = {},
-        .imageView = _depthTexture.getImageView(),
-        .imageExtent = _swapChainExtent
-    };
 }
 
 void Renderer::createGBufferResources()
@@ -127,21 +112,6 @@ void Renderer::createGBufferResources()
         .memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         .aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT
     });
-    _baseColorAttachment = AttachmentHandle{
-        .description = {
-            .format = baseColorFormat,
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-        },
-        .reference = {},
-        .imageView = _baseColorTexture.getImageView(),
-        .imageExtent = _swapChainExtent
-    };
 
     // Normal
     auto normalFormat = findSupportedFormat(_settings.physicalDevice,
@@ -157,21 +127,6 @@ void Renderer::createGBufferResources()
         .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         .memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         .aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT});
-    _normalAttachment = AttachmentHandle{
-        .description = {
-            .format = normalFormat,
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-        },
-        .reference = {},
-        .imageView = _normalTexture.getImageView(),
-        .imageExtent = _swapChainExtent
-    };
 }
 
 void Renderer::createSwapChain()
@@ -233,22 +188,6 @@ void Renderer::createSwapChain()
 
         // Image, image view and attachment
         imageData.image = swapChainImages[i];
-        imageData.colorAttachment = AttachmentHandle{
-            {
-                .format = _swapChainImageFormat,
-                .samples = VK_SAMPLE_COUNT_1_BIT,
-                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-            },
-            {},
-            gu2::createImageView(_settings.device, _swapChainObjects[i].image, _swapChainImageFormat,
-                VK_IMAGE_ASPECT_COLOR_BIT, 1),
-            _swapChainExtent
-        };
     }
 
     // Create new GBuffer
@@ -261,9 +200,6 @@ void Renderer::createSwapChain()
 
 void Renderer::cleanupSwapChain()
 {
-    for (auto& imageData : _swapChainObjects)
-        vkDestroyImageView(_settings.device, imageData.colorAttachment.imageView, nullptr);
-
     vkDestroySwapchainKHR(_settings.device, _swapChain, nullptr);
 }
 
@@ -279,19 +215,20 @@ void Renderer::recreateSwapChain()
 
 void Renderer::createGeometryPass()
 {
-    _geometryPass.setOutputAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, _baseColorAttachment);
-    _geometryPass.setOutputAttachment(1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, _normalAttachment);
-    _geometryPass.setOutputAttachment(2, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, _depthAttachment);
+    _geometryPass.setOutputExtent(_swapChainExtent);
+    _geometryPass.setOutputAttachment(0, _baseColorTexture);
+    _geometryPass.setOutputAttachment(1, _normalTexture);
+    _geometryPass.setOutputAttachment(2, _depthTexture);
     _geometryPass.build();
 }
 
 void Renderer::createCompositePass()
 {
-    _compositePass.setInputAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, _baseColorAttachment);
-    _compositePass.setInputAttachment(1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, _normalAttachment);
+    _compositePass.setOutputExtent(_swapChainExtent);
+    _compositePass.setInputAttachment(0, _baseColorTexture);
+    _compositePass.setInputAttachment(1, _normalTexture);
     for (size_t i=0; i<_swapChainObjects.size(); ++i)
-        _compositePass.setOutputAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            _swapChainObjects[i].colorAttachment, i);
+        _compositePass.setOutputAttachment(0, _swapChainObjects[i].image, _swapChainImageFormat, i);
     _compositePass.createQuad(_commandPool, _settings.graphicsQueue);
     _compositePass.build();
 }
